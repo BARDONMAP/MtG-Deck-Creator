@@ -60,6 +60,11 @@ document.addEventListener("alpine:init", () => {
     aiEditMessage: "",
     aiEditSummary: "",
 
+    // Hover card tooltip
+    hoverCard: null,
+    hoverStyle: "",
+    hoverTimer: null,
+
     BASIC_LANDS: new Set([
       "Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes",
       "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
@@ -597,6 +602,27 @@ document.addEventListener("alpine:init", () => {
     },
 
     // ── UI helpers ──────────────────────────────────────────────────────────
+    showHoverCard(card, event) {
+      clearTimeout(this.hoverTimer);
+      this.hoverTimer = setTimeout(() => {
+        if (!card?.image_uri) return;
+        const tooltipWidth = 192; // w-48
+        const margin = 16;
+        let x = event.clientX + margin;
+        if (x + tooltipWidth > window.innerWidth) {
+          x = event.clientX - tooltipWidth - margin;
+        }
+        const y = Math.max(8, Math.min(event.clientY - 60, window.innerHeight - 280));
+        this.hoverStyle = `left:${x}px;top:${y}px`;
+        this.hoverCard = card;
+      }, 150);
+    },
+
+    hideHoverCard() {
+      clearTimeout(this.hoverTimer);
+      this.hoverCard = null;
+    },
+
     colorClass(color) {
       return {
         W: "bg-yellow-100 text-yellow-900 border border-yellow-300",

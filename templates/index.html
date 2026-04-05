@@ -272,17 +272,19 @@
               <span class="text-gray-600 font-normal normal-case tracking-normal"
                     x-text="commander?.usd_price ? `$${commander.usd_price.toFixed(2)}` : ''"></span>
             </h3>
-            <div class="bg-gray-800/70 hover:bg-gray-800 rounded-lg px-4 py-2.5 flex items-center gap-3 group border border-gray-700/50">
+            <div class="bg-gray-800/70 hover:bg-gray-800 rounded-lg px-4 py-2.5 flex items-center gap-3 group border border-gray-700/50 cursor-pointer"
+                 @mouseenter="showHoverCard(commander, $event)" @mouseleave="hideHoverCard()"
+                 @click="selectCardByName(commander.card_name)">
               <span class="text-sm font-semibold text-purple-200" x-text="commander?.card_name"></span>
               <span class="text-xs text-gray-500 ml-auto" x-text="commander?.mana_cost"></span>
               <span class="text-xs font-mono tabular-nums w-16 text-right"
                     :class="commander?.usd_price ? 'text-green-400' : 'text-gray-600'"
                     x-text="commander?.usd_price ? `$${commander.usd_price.toFixed(2)}` : '—'"></span>
               <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button @click="openBudgetModal(commander)"
+                <button @click.stop="openBudgetModal(commander)"
                         title="Compare printings"
                         class="text-xs text-amber-500 hover:text-amber-400">💰</button>
-                <button @click="removeCard(commander?.card_name, true)"
+                <button @click.stop="removeCard(commander?.card_name, true)"
                         class="text-xs text-gray-600 hover:text-red-400">✕</button>
               </div>
             </div>
@@ -300,18 +302,20 @@
               </h3>
               <div class="space-y-1">
                 <template x-for="card in cardsByType[type]" :key="card.card_name + card.scryfall_id">
-                  <div class="bg-gray-800/60 hover:bg-gray-800 rounded-lg px-4 py-2 flex items-center gap-3 group border border-transparent hover:border-gray-700/50 transition-all">
+                  <div class="bg-gray-800/60 hover:bg-gray-800 rounded-lg px-4 py-2 flex items-center gap-3 group border border-transparent hover:border-gray-700/50 transition-all cursor-pointer"
+                       @mouseenter="showHoverCard(card, $event)" @mouseleave="hideHoverCard()"
+                       @click="selectCardByName(card.card_name)">
 
                     <!-- Quantity controls (only for basic lands) -->
                     <div class="flex items-center gap-1 w-12 flex-shrink-0">
                       <button x-show="BASIC_LANDS.has(card.card_name)"
-                              @click="updateQuantity(card, -1)"
+                              @click.stop="updateQuantity(card, -1)"
                               class="w-5 h-5 text-gray-500 hover:text-white text-xs flex items-center justify-center">−</button>
                       <span class="text-sm tabular-nums w-4 text-center"
                             x-text="card.quantity > 1 ? card.quantity : ''"
                             :class="card.quantity > 1 ? 'text-gray-400' : ''"></span>
                       <button x-show="BASIC_LANDS.has(card.card_name)"
-                              @click="updateQuantity(card, 1)"
+                              @click.stop="updateQuantity(card, 1)"
                               class="w-5 h-5 text-gray-500 hover:text-white text-xs flex items-center justify-center">+</button>
                     </div>
 
@@ -329,10 +333,10 @@
 
                     <!-- Hover actions -->
                     <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                      <button @click="openBudgetModal(card)"
+                      <button @click.stop="openBudgetModal(card)"
                               title="Compare printings"
                               class="text-xs text-amber-600 hover:text-amber-400">💰</button>
-                      <button @click="removeCard(card.card_name, false)"
+                      <button @click.stop="removeCard(card.card_name, false)"
                               class="text-xs text-gray-600 hover:text-red-400">✕</button>
                     </div>
                   </div>
@@ -947,6 +951,22 @@ Deck
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- CARD HOVER TOOLTIP                                                      -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="hoverCard && hoverCard.image_uri"
+       x-cloak
+       :style="hoverStyle"
+       class="fixed z-[200] pointer-events-none w-48 rounded-xl overflow-hidden shadow-2xl border border-gray-600"
+       x-transition:enter="transition ease-out duration-100"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       x-transition:leave="transition ease-in duration-75"
+       x-transition:leave-start="opacity-100 scale-100"
+       x-transition:leave-end="opacity-0 scale-95">
+    <img :src="hoverCard?.image_uri" :alt="hoverCard?.card_name" class="w-full block" />
   </div>
 
 </body>
