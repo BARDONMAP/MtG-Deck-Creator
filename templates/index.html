@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MTG Commander Deck Builder</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="/static/app.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+  </style>
+</head>
+<body class="h-full bg-gray-950 text-gray-100 overflow-hidden"
+      x-data="deckBuilder" x-init="init()" x-cloak>
+
+  <div class="flex h-screen">
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- SIDEBAR                                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <aside class="w-64 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+      <!-- Title -->
+      <div class="px-4 py-4 border-b border-gray-800">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">⚔️</span>
+          <div>
+            <h1 class="font-bold text-purple-400 leading-tight">Commander</h1>
+            <p class="text-xs text-gray-500">Deck Builder</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- New Deck -->
+      <div class="p-3 pb-2 border-b border-gray-800 space-y-2">
+        <button @click="createNewDeck()"
+                class="w-full bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white text-sm font-semibold py-2 rounded-lg transition-colors">
+          + New Deck
+        </button>
+        <button @click="openGenerateModal()"
+                class="w-full bg-indigo-700 hover:bg-indigo-600 active:bg-indigo-800 text-white text-sm font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5">
+          ✨ Generate with AI
+        </button>
+      </div>
+
+      <!-- Deck list -->
+      <div class="flex-1 overflow-y-auto p-3 space-y-1.5">
+        <p class="text-xs text-gray-600 uppercase tracking-wider px-1 mb-2">Your Decks</p>
+
+        <template x-if="savedDecks.length === 0">
+          <p class="text-xs text-gray-600 px-1">No decks yet.</p>
+        </template>
+
+        <template x-for="deck in savedDecks" :key="deck.id">
+          <div @click="loadDeck(deck.id)"
+               class="group p-3 rounded-lg cursor-pointer border transition-all"
+               :class="currentDeck?.id === deck.id
+                 ? 'bg-purple-950 border-purple-700'
+                 : 'bg-gray-800/60 border-gray-700/50 hover:border-gray-600'">
+            <div class="flex items-start gap-1">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate" x-text="deck.name"></p>
+                <p class="text-xs text-gray-500 truncate mt-0.5"
+                   x-text="deck.commander_name || 'No commander'"></p>
+                <div class="flex items-center gap-2 mt-1.5">
+                  <span class="text-xs tabular-nums"
+                        :class="deck.card_count === 100 ? 'text-green-400' : 'text-gray-500'"
+                        x-text="`${deck.card_count}/100`"></span>
+                  <span class="text-xs text-green-400 font-mono tabular-nums"
+                        x-text="`$${deck.total_price.toFixed(2)}`"></span>
+                </div>
+              </div>
+              <button @click.stop="deleteDeck(deck.id)"
+                      class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs p-0.5 mt-0.5 flex-shrink-0">
+                ✕
+              </button>
+            </div>
+          </div>
+        </template>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- MAIN                                                               -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <!-- Top bar -->
+      <header class="bg-gray-900 border-b border-gray-800 px-5 py-3 flex items-center gap-4 flex-shrink-0">
+
+        <!-- Deck name -->
+        <input x-model="currentDeck.name"
+               @input="triggerSave()"
+               class="bg-transparent text-lg font-bold text-white border-none outline-none focus:bg-gray-800 px-2 py-1 rounded transition-colors min-w-0 w-48"
+               placeholder="Deck Name"
+               x-show="currentDeck" />
+
+        <!-- Commander + color identity -->
+        <div class="flex items-center gap-2 flex-1 min-w-0" x-show="commander">
+          <span class="text-xs text-gray-500 flex-shrink-0">CMD:</span>
+          <span class="text-sm text-purple-300 truncate" x-text="commander?.card_name"></span>
+          <div class="flex gap-1 flex-shrink-0">
+            <template x-for="color in commanderColorIdentity" :key="color">
+              <span class="w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold flex-shrink-0"
+                    :class="colorClass(color)" x-text="color"></span>
+            </template>
+            <span x-show="commanderColorIdentity.length === 0"
+                  class="text-xs text-gray-600 italic">Colorless</span>
+          </div>
+        </div>
+        <div class="flex-1" x-show="!commander"></div>
+
+        <!-- Stats + Actions -->
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <!-- Card count -->
+          <div class="text-sm tabular-nums">
+            <span :class="{
+                    'text-green-400 font-bold': totalCards === 100,
+                    'text-yellow-400': totalCards < 100 && totalCards > 0,
+                    'text-red-400 font-bold': totalCards > 100,
+                    'text-gray-500': totalCards === 0
+                  }"
+                  x-text="totalCards"></span>
+            <span class="text-gray-600">/100</span>
+          </div>
+
+          <!-- Total price -->
+          <div class="bg-green-950 text-green-400 border border-green-900 px-3 py-1 rounded-lg text-sm font-mono tabular-nums">
+            $<span x-text="totalPrice.toFixed(2)"></span>
+          </div>
+
+          <!-- Save status -->
+          <span class="text-xs w-20 text-right"
+                :class="{
+                  'text-gray-500': saveStatus === 'saved',
+                  'text-yellow-400': saveStatus === 'unsaved',
+                  'text-blue-400': saveStatus === 'saving',
+                  'text-red-400': saveStatus === 'error'
+                }"
+                x-text="{saved:'✓ Saved', unsaved:'● Unsaved', saving:'↻ Saving…', error:'⚠ Error'}[saveStatus]">
+          </span>
+
+          <!-- Action buttons -->
+          <button @click="openPrimerModal()"
+                  x-show="currentDeck"
+                  class="text-xs bg-indigo-800 hover:bg-indigo-700 border border-indigo-700 px-3 py-1.5 rounded-lg transition-colors">
+            📖 Primer
+          </button>
+          <button @click="refreshPrices()"
+                  title="Refresh prices from Scryfall"
+                  class="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 px-3 py-1.5 rounded-lg transition-colors">
+            ↺ Prices
+          </button>
+          <button @click="validateDeck()"
+                  class="text-xs bg-blue-700 hover:bg-blue-600 px-3 py-1.5 rounded-lg transition-colors font-medium">
+            ✓ Validate
+          </button>
+          <button @click="exportDeck()"
+                  class="text-xs bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg transition-colors">
+            ↓ Export
+          </button>
+          <button @click="openImportModal()"
+                  class="text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600 px-3 py-1.5 rounded-lg transition-colors">
+            ↑ Import
+          </button>
+        </div>
+      </header>
+
+      <!-- Tagline row -->
+      <div x-show="currentDeck"
+           class="border-b border-gray-800/60 bg-gray-900/40 px-5 flex-shrink-0 group">
+        <div class="flex items-center gap-2 py-1.5">
+
+          <!-- Tagline text / inline edit -->
+          <template x-if="!taglineEditing">
+            <span @click="taglineEditing = true; $nextTick(() => $refs.taglineInput?.focus())"
+                  class="text-xs italic flex-1 cursor-text transition-colors leading-relaxed"
+                  :class="currentDeck?.tagline ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-500'"
+                  x-text="currentDeck?.tagline || 'Click to add a description, or generate one with ✨'">
+            </span>
+          </template>
+          <template x-if="taglineEditing">
+            <input x-ref="taglineInput"
+                   x-model="currentDeck.tagline"
+                   @blur="taglineEditing = false; triggerSave()"
+                   @keydown.enter="taglineEditing = false; triggerSave()"
+                   @keydown.escape="taglineEditing = false"
+                   class="flex-1 bg-transparent text-xs italic text-gray-300 outline-none border-b border-indigo-500/60 pb-0.5 placeholder-gray-600"
+                   placeholder="Write a description…" />
+          </template>
+
+          <!-- Regenerate toggle -->
+          <button @click="showTaglineRegen = !showTaglineRegen; taglineGuidance = ''"
+                  class="text-xs text-indigo-400 hover:text-indigo-300 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                  title="Generate with AI">✨</button>
+        </div>
+
+        <!-- Regen guidance bar -->
+        <div x-show="showTaglineRegen" class="flex items-center gap-2 pb-2">
+          <input x-model="taglineGuidance"
+                 @keydown.enter="generateTagline()"
+                 :disabled="taglineGenerating"
+                 class="flex-1 bg-gray-800 text-xs px-3 py-1.5 rounded-lg border border-gray-700 focus:border-indigo-500 focus:outline-none placeholder-gray-600 disabled:opacity-50"
+                 placeholder="Guide the AI (optional)… e.g. 'make it more menacing' or 'add a pun'" />
+          <button @click="generateTagline()"
+                  :disabled="taglineGenerating"
+                  class="text-xs px-3 py-1.5 rounded-lg font-semibold flex-shrink-0 transition-colors"
+                  :class="taglineGenerating ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
+                  x-text="taglineGenerating ? '✨ Generating…' : '✨ Generate'">
+          </button>
+          <button @click="showTaglineRegen = false"
+                  class="text-xs text-gray-600 hover:text-gray-400 flex-shrink-0">Cancel</button>
+        </div>
+      </div>
+
+      <!-- AI Edit bar -->
+      <div x-show="currentDeck" class="border-b border-gray-800 bg-gray-900/70 flex-shrink-0">
+        <div class="px-4 py-2 flex items-center gap-2">
+          <span class="text-indigo-400 flex-shrink-0 text-sm">✨</span>
+          <input x-model="aiEditInstruction"
+                 @keydown.enter="submitAiEdit()"
+                 :disabled="aiEditStatus === 'editing'"
+                 class="flex-1 bg-gray-800 text-sm px-3 py-1.5 rounded-lg border border-gray-700 focus:border-indigo-500 focus:outline-none placeholder-gray-600 transition-colors disabled:opacity-50"
+                 placeholder="Tell AI how to modify this deck… e.g. 'Add more ramp' or 'Replace the weakest creatures with better ones'" />
+          <button @click="submitAiEdit()"
+                  :disabled="!aiEditInstruction.trim() || aiEditStatus === 'editing'"
+                  class="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors flex-shrink-0"
+                  :class="!aiEditInstruction.trim() || aiEditStatus === 'editing'
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
+                  x-text="aiEditStatus === 'editing' ? '↻ Editing…' : 'Apply'">
+          </button>
+          <span x-show="aiEditMessage"
+                class="text-xs flex-shrink-0 tabular-nums"
+                :class="aiEditStatus === 'error' ? 'text-red-400' : 'text-green-400'"
+                x-text="aiEditMessage">
+          </span>
+        </div>
+        <!-- Change summary panel -->
+        <div x-show="aiEditSummary"
+             class="px-4 pb-3 flex items-start gap-2">
+          <span class="text-indigo-400 text-xs flex-shrink-0 mt-0.5">↳</span>
+          <p class="text-xs text-gray-400 leading-relaxed flex-1" x-text="aiEditSummary"></p>
+          <button @click="aiEditSummary = ''; aiEditStatus = 'idle'; aiEditMessage = ''"
+                  class="text-gray-600 hover:text-gray-400 text-xs flex-shrink-0 mt-0.5">✕</button>
+        </div>
+      </div>
+
+      <!-- Content row -->
+      <div class="flex flex-1 min-h-0">
+
+        <!-- ─────────────────────────────────────────────────────────────── -->
+        <!-- DECK LIST                                                       -->
+        <!-- ─────────────────────────────────────────────────────────────── -->
+        <main class="flex-1 overflow-y-auto p-5 space-y-5">
+
+          <!-- Empty state -->
+          <div x-show="totalCards === 0" class="flex flex-col items-center justify-center h-full text-gray-700">
+            <p class="text-5xl mb-4">🃏</p>
+            <p class="text-lg font-medium">Your deck is empty</p>
+            <p class="text-sm mt-1">Search for cards in the panel on the right →</p>
+          </div>
+
+          <!-- Commander section -->
+          <div x-show="commander">
+            <h3 class="text-xs font-semibold text-purple-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+              Commander
+              <span class="text-gray-600 font-normal normal-case tracking-normal"
+                    x-text="commander?.usd_price ? `$${commander.usd_price.toFixed(2)}` : ''"></span>
+            </h3>
+            <div class="bg-gray-800/70 hover:bg-gray-800 rounded-lg px-4 py-2.5 flex items-center gap-3 group border border-gray-700/50">
+              <span class="text-sm font-semibold text-purple-200" x-text="commander?.card_name"></span>
+              <span class="text-xs text-gray-500 ml-auto" x-text="commander?.mana_cost"></span>
+              <span class="text-xs font-mono tabular-nums w-16 text-right"
+                    :class="commander?.usd_price ? 'text-green-400' : 'text-gray-600'"
+                    x-text="commander?.usd_price ? `$${commander.usd_price.toFixed(2)}` : '—'"></span>
+              <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button @click="openBudgetModal(commander)"
+                        title="Compare printings"
+                        class="text-xs text-amber-500 hover:text-amber-400">💰</button>
+                <button @click="removeCard(commander?.card_name, true)"
+                        class="text-xs text-gray-600 hover:text-red-400">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card groups -->
+          <template x-for="type in TYPE_ORDER" :key="type">
+            <div x-show="cardsByType[type]?.length > 0">
+              <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                <span x-text="type"></span>
+                <span class="text-gray-600 font-normal normal-case tracking-normal"
+                      x-text="`(${groupTotal(cardsByType[type])})`"></span>
+                <span class="ml-auto text-gray-600 font-normal normal-case tracking-normal"
+                      x-text="`$${groupPrice(cardsByType[type]).toFixed(2)}`"></span>
+              </h3>
+              <div class="space-y-1">
+                <template x-for="card in cardsByType[type]" :key="card.card_name + card.scryfall_id">
+                  <div class="bg-gray-800/60 hover:bg-gray-800 rounded-lg px-4 py-2 flex items-center gap-3 group border border-transparent hover:border-gray-700/50 transition-all">
+
+                    <!-- Quantity controls (only for basic lands) -->
+                    <div class="flex items-center gap-1 w-12 flex-shrink-0">
+                      <button x-show="BASIC_LANDS.has(card.card_name)"
+                              @click="updateQuantity(card, -1)"
+                              class="w-5 h-5 text-gray-500 hover:text-white text-xs flex items-center justify-center">−</button>
+                      <span class="text-sm tabular-nums w-4 text-center"
+                            x-text="card.quantity > 1 ? card.quantity : ''"
+                            :class="card.quantity > 1 ? 'text-gray-400' : ''"></span>
+                      <button x-show="BASIC_LANDS.has(card.card_name)"
+                              @click="updateQuantity(card, 1)"
+                              class="w-5 h-5 text-gray-500 hover:text-white text-xs flex items-center justify-center">+</button>
+                    </div>
+
+                    <!-- Card name -->
+                    <span class="text-sm flex-1 truncate" x-text="card.card_name"></span>
+
+                    <!-- Mana cost -->
+                    <span class="text-xs text-gray-600 hidden lg:block flex-shrink-0"
+                          x-text="card.mana_cost"></span>
+
+                    <!-- Price -->
+                    <span class="text-xs font-mono tabular-nums w-16 text-right flex-shrink-0"
+                          :class="card.usd_price ? 'text-green-400' : 'text-gray-600'"
+                          x-text="card.usd_price ? `$${card.usd_price.toFixed(2)}` : '—'"></span>
+
+                    <!-- Hover actions -->
+                    <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      <button @click="openBudgetModal(card)"
+                              title="Compare printings"
+                              class="text-xs text-amber-600 hover:text-amber-400">💰</button>
+                      <button @click="removeCard(card.card_name, false)"
+                              class="text-xs text-gray-600 hover:text-red-400">✕</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </main>
+
+        <!-- ─────────────────────────────────────────────────────────────── -->
+        <!-- RIGHT PANEL: SEARCH + CARD PREVIEW                             -->
+        <!-- ─────────────────────────────────────────────────────────────── -->
+        <aside class="w-80 flex-shrink-0 bg-gray-900 border-l border-gray-800 flex flex-col">
+
+          <!-- Search input -->
+          <div class="p-3 border-b border-gray-800 relative">
+            <div class="relative">
+              <input x-model="searchQuery"
+                     @input="onSearchInput()"
+                     @keydown.escape="showAutocomplete = false; clearSearch()"
+                     @keydown.enter="autocompleteResults.length > 0 && selectCardByName(autocompleteResults[0])"
+                     @keydown.arrow-down.prevent="/* future: keyboard nav */"
+                     @click.away="showAutocomplete = false"
+                     class="w-full bg-gray-800 text-sm px-3 py-2 pr-8 rounded-lg border border-gray-700 focus:border-purple-500 focus:outline-none placeholder-gray-600 transition-colors"
+                     placeholder="Search cards…" />
+              <button x-show="searchQuery"
+                      @click="clearSearch(); selectedCard = null"
+                      class="absolute right-2.5 top-2.5 text-gray-500 hover:text-gray-300 text-xs">✕</button>
+            </div>
+
+            <!-- Autocomplete dropdown -->
+            <div x-show="showAutocomplete && autocompleteResults.length > 0"
+                 class="absolute left-3 right-3 top-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
+              <template x-for="name in autocompleteResults" :key="name">
+                <div @click="selectCardByName(name)"
+                     class="px-3 py-2 text-sm hover:bg-gray-700 cursor-pointer flex items-center justify-between transition-colors">
+                  <span x-text="name"></span>
+                  <span x-show="isCommander(name)" class="text-xs text-purple-400 ml-2 flex-shrink-0">CMD</span>
+                  <span x-show="!isCommander(name) && isInDeck(name)" class="text-xs text-green-500 ml-2 flex-shrink-0">✓</span>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Card preview -->
+          <div class="flex-1 overflow-y-auto p-3">
+
+            <!-- Loading -->
+            <div x-show="isSearching" class="flex flex-col items-center justify-center h-32 text-gray-600">
+              <div class="text-2xl mb-2 animate-pulse">🔄</div>
+              <p class="text-sm">Loading…</p>
+            </div>
+
+            <!-- Empty state -->
+            <div x-show="!selectedCard && !isSearching" class="flex flex-col items-center justify-center h-40 text-gray-700">
+              <p class="text-3xl mb-2">🔍</p>
+              <p class="text-sm text-center">Search for a card above<br>to see details &amp; pricing</p>
+            </div>
+
+            <!-- Card details -->
+            <div x-show="selectedCard && !isSearching" class="space-y-3">
+
+              <!-- Card image -->
+              <img x-show="selectedCard?.image_uri"
+                   :src="selectedCard?.image_uri"
+                   :alt="selectedCard?.name"
+                   class="w-full rounded-xl shadow-lg" />
+
+              <!-- Name + type -->
+              <div>
+                <h3 class="font-bold text-white text-sm" x-text="selectedCard?.name"></h3>
+                <p class="text-xs text-gray-400 mt-0.5" x-text="selectedCard?.type_line"></p>
+              </div>
+
+              <!-- Oracle text -->
+              <p class="text-xs text-gray-500 leading-relaxed bg-gray-800/50 rounded-lg p-2"
+                 x-text="selectedCard?.oracle_text"
+                 x-show="selectedCard?.oracle_text"></p>
+
+              <!-- Pricing -->
+              <div class="bg-gray-800 rounded-lg p-3 space-y-1.5">
+                <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Pricing</p>
+                <div class="flex justify-between items-center">
+                  <span class="text-xs text-gray-400">Normal (USD)</span>
+                  <span class="text-sm font-mono font-semibold"
+                        :class="selectedCard?.prices?.usd ? 'text-green-400' : 'text-gray-600'"
+                        x-text="selectedCard?.prices?.usd ? `$${selectedCard.prices.usd}` : 'N/A'"></span>
+                </div>
+                <div class="flex justify-between items-center" x-show="selectedCard?.prices?.usd_foil">
+                  <span class="text-xs text-gray-400">Foil (USD)</span>
+                  <span class="text-sm font-mono font-semibold text-amber-400"
+                        x-text="selectedCard?.prices?.usd_foil ? `$${selectedCard.prices.usd_foil}` : '—'"></span>
+                </div>
+                <div class="flex justify-between items-center" x-show="selectedCard?.prices?.eur">
+                  <span class="text-xs text-gray-400">EUR</span>
+                  <span class="text-xs font-mono text-gray-400"
+                        x-text="selectedCard?.prices?.eur ? `€${selectedCard.prices.eur}` : '—'"></span>
+                </div>
+              </div>
+
+              <!-- Legality + color identity -->
+              <div class="flex flex-wrap gap-2 items-center">
+                <span class="text-xs px-2 py-1 rounded-full font-medium"
+                      :class="selectedCard?.is_commander_legal
+                        ? 'bg-green-900/60 text-green-300 border border-green-800'
+                        : 'bg-red-900/60 text-red-300 border border-red-800'"
+                      x-text="selectedCard?.is_commander_legal ? '✓ Commander Legal' : '✕ Not Legal'">
+                </span>
+                <span x-show="selectedCard?.can_be_commander"
+                      class="text-xs px-2 py-1 rounded-full bg-purple-900/60 text-purple-300 border border-purple-800 font-medium">
+                  ♛ Can Be Commander
+                </span>
+              </div>
+
+              <!-- Color identity pips -->
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-600">Color Identity:</span>
+                <div class="flex gap-1">
+                  <template x-for="color in (selectedCard?.color_identity ?? [])" :key="color">
+                    <span class="w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold"
+                          :class="colorClass(color)" x-text="color"></span>
+                  </template>
+                  <span x-show="(selectedCard?.color_identity ?? []).length === 0"
+                        class="text-xs text-gray-600 italic">Colorless</span>
+                </div>
+              </div>
+
+              <!-- Set info -->
+              <p class="text-xs text-gray-600"
+                 x-text="`${selectedCard?.set_name ?? ''} · ${(selectedCard?.rarity ?? '').charAt(0).toUpperCase() + (selectedCard?.rarity ?? '').slice(1)}`">
+              </p>
+
+              <!-- Add / Set Commander buttons -->
+              <div class="flex gap-2 pt-1">
+                <button @click="addCard(selectedCard)"
+                        :disabled="!selectedCard?.is_commander_legal"
+                        class="flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition-colors"
+                        :class="isInDeck(selectedCard?.name)
+                          ? 'bg-green-900/40 text-green-400 cursor-default border border-green-900'
+                          : selectedCard?.is_commander_legal
+                            ? 'bg-purple-600 hover:bg-purple-500 active:bg-purple-700 text-white'
+                            : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
+                        x-text="isInDeck(selectedCard?.name) ? '✓ In Deck' : '+ Add to Deck'">
+                </button>
+
+                <button @click="setAsCommander(selectedCard)"
+                        x-show="selectedCard?.can_be_commander"
+                        class="py-2 px-3 rounded-lg text-sm font-semibold transition-colors flex-shrink-0"
+                        :class="isCommander(selectedCard?.name)
+                          ? 'bg-purple-950 text-purple-400 cursor-default border border-purple-800'
+                          : 'bg-purple-800 hover:bg-purple-700 text-white'"
+                        x-text="isCommander(selectedCard?.name) ? '♛' : '♛ CMD'">
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- BUDGET / PRINTINGS MODAL                                               -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showBudgetModal"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showBudgetModal = false">
+
+    <div class="bg-gray-900 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col border border-gray-700 shadow-2xl">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+        <div>
+          <h2 class="font-bold text-white">Printings &amp; Prices</h2>
+          <p class="text-sm text-purple-400" x-text="budgetCardName"></p>
+        </div>
+        <button @click="showBudgetModal = false" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 p-4">
+        <div x-show="budgetLoading" class="text-center text-gray-600 py-10">
+          <p class="animate-pulse">Loading printings…</p>
+        </div>
+        <div x-show="!budgetLoading && budgetPrintings.length === 0" class="text-center text-gray-600 py-10">
+          <p>No USD-priced printings found.</p>
+        </div>
+
+        <div class="space-y-2" x-show="!budgetLoading">
+          <template x-for="p in budgetPrintings" :key="p.id">
+            <div class="flex items-center gap-3 bg-gray-800 rounded-xl p-3 transition-colors"
+                 :class="p.id === budgetCurrentId ? 'ring-1 ring-purple-500 bg-purple-950/30' : 'hover:bg-gray-750'">
+
+              <!-- Thumbnail -->
+              <img x-show="p.image_uri" :src="p.image_uri" class="w-9 h-12 object-cover rounded flex-shrink-0 shadow" />
+              <div x-show="!p.image_uri" class="w-9 h-12 bg-gray-700 rounded flex-shrink-0"></div>
+
+              <!-- Set info -->
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate" x-text="p.set_name"></p>
+                <p class="text-xs text-gray-500" x-text="`${p.set.toUpperCase()} #${p.collector_number}`"></p>
+                <div class="flex gap-1.5 mt-1">
+                  <span x-show="p.promo" class="text-xs bg-amber-900/60 text-amber-400 px-1.5 py-0.5 rounded">Promo</span>
+                  <span x-show="p.digital" class="text-xs bg-blue-900/60 text-blue-400 px-1.5 py-0.5 rounded">Digital</span>
+                </div>
+              </div>
+
+              <!-- Prices -->
+              <div class="text-right flex-shrink-0 min-w-[4rem]">
+                <p class="text-green-400 font-mono text-sm font-semibold"
+                   x-text="p.prices.usd ? `$${p.prices.usd}` : '—'"></p>
+                <p class="text-amber-500 font-mono text-xs"
+                   x-show="p.prices.usd_foil"
+                   x-text="p.prices.usd_foil ? `$${p.prices.usd_foil} foil` : ''"></p>
+              </div>
+
+              <!-- Action -->
+              <button @click="switchPrinting(p)"
+                      :disabled="p.id === budgetCurrentId"
+                      class="text-xs px-3 py-1.5 rounded-lg font-semibold flex-shrink-0 transition-colors"
+                      :class="p.id === budgetCurrentId
+                        ? 'bg-purple-950 text-purple-400 border border-purple-800 cursor-default'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'"
+                      x-text="p.id === budgetCurrentId ? '✓ Selected' : 'Use This'">
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- VALIDATION MODAL                                                       -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showValidationModal"
+       x-transition.opacity
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showValidationModal = false">
+
+    <div class="bg-gray-900 rounded-2xl w-full max-w-lg border border-gray-700 shadow-2xl">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+        <h2 class="font-bold text-white">Deck Validation</h2>
+        <button @click="showValidationModal = false" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+      </div>
+
+      <div class="p-5">
+        <!-- Valid -->
+        <div x-show="validationResult?.valid" class="text-center py-4">
+          <p class="text-5xl mb-3">✅</p>
+          <p class="text-green-400 font-bold text-xl">Deck is Valid!</p>
+          <p class="text-gray-500 text-sm mt-1"
+             x-text="`${validationResult?.total_cards}/100 cards — ready to play`"></p>
+        </div>
+
+        <!-- Invalid -->
+        <div x-show="!validationResult?.valid">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="text-red-400 font-bold">Issues Found</span>
+            <span class="text-xs text-gray-500 ml-1"
+                  x-text="`${validationResult?.total_cards}/100 cards`"></span>
+          </div>
+          <div class="space-y-2 max-h-72 overflow-y-auto">
+            <template x-for="issue in validationResult?.issues" :key="issue">
+              <div class="bg-red-950/50 border border-red-900/50 rounded-lg p-3 text-sm text-red-300"
+                   x-text="issue"></div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- EXPORT MODAL                                                           -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showExportModal"
+       x-transition.opacity
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showExportModal = false">
+
+    <div class="bg-gray-900 rounded-2xl w-full max-w-lg border border-gray-700 shadow-2xl">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+        <h2 class="font-bold text-white">Export Deck List</h2>
+        <button @click="showExportModal = false" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+      </div>
+      <div class="p-5">
+        <textarea x-text="exportText"
+                  readonly
+                  class="w-full bg-gray-800 text-xs text-gray-300 font-mono p-3 rounded-lg border border-gray-700 h-64 resize-none focus:outline-none">
+        </textarea>
+        <p class="text-xs text-gray-600 mt-2">
+          Compatible with Moxfield, Archidekt, TappedOut, and most MTG deck sites.
+        </p>
+        <div class="flex gap-2 mt-3">
+          <button @click="copyExport()"
+                  class="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
+                  :class="exportCopied ? 'bg-green-700 text-white' : 'bg-purple-600 hover:bg-purple-500 text-white'"
+                  x-text="exportCopied ? '✓ Copied!' : 'Copy to Clipboard'">
+          </button>
+          <button @click="showExportModal = false"
+                  class="px-4 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm transition-colors">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- IMPORT MODAL                                                           -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showImportModal"
+       x-transition.opacity
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showImportModal = false">
+
+    <div class="bg-gray-900 rounded-2xl w-full max-w-xl border border-gray-700 shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
+        <div>
+          <h2 class="font-bold text-white">Import Deck List</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Paste a list from Moxfield, Archidekt, TappedOut, MTGO, Arena, etc.</p>
+        </div>
+        <button @click="showImportModal = false" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 p-5 space-y-4">
+
+        <!-- Paste area -->
+        <div>
+          <textarea x-model="importText"
+                    @input="onImportTextChange()"
+                    class="w-full bg-gray-800 text-xs text-gray-300 font-mono p-3 rounded-lg border border-gray-700 focus:border-purple-500 focus:outline-none h-48 resize-none placeholder-gray-600"
+                    placeholder="Commander
+1 Atraxa, Praetors' Voice
+
+Deck
+1 Sol Ring
+1 Command Tower
+4 Forest
+..."></textarea>
+        </div>
+
+        <!-- Live parse preview -->
+        <div x-show="importParsed.length > 0" class="bg-gray-800/60 rounded-lg px-4 py-3 text-sm space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-gray-400">Parsed</span>
+            <span class="text-white font-semibold tabular-nums"
+                  x-text="`${importParsed.reduce((s,c)=>s+c.quantity,0)} cards`"></span>
+          </div>
+          <div class="flex items-center justify-between" x-show="importCommanderName">
+            <span class="text-gray-400">Commander</span>
+            <span class="text-purple-300 text-xs" x-text="importCommanderName"></span>
+          </div>
+        </div>
+
+        <!-- Fetch results -->
+        <div x-show="importStatus === 'done' && importResult" class="space-y-2">
+          <div class="bg-green-950/50 border border-green-900/50 rounded-lg px-4 py-3 text-sm">
+            <div class="flex justify-between">
+              <span class="text-green-400 font-semibold">Found</span>
+              <span class="text-green-300 tabular-nums" x-text="`${importResult?.cards?.length ?? 0} cards`"></span>
+            </div>
+            <div class="flex justify-between mt-1">
+              <span class="text-green-400">Total price</span>
+              <span class="text-green-300 font-mono tabular-nums"
+                    x-text="`$${(importResult?.cards ?? []).reduce((s,c)=>{return s+(parseFloat(c.prices?.usd)||0)*c.quantity},0).toFixed(2)}`">
+              </span>
+            </div>
+          </div>
+
+          <!-- Not found list -->
+          <div x-show="importResult?.not_found?.length > 0"
+               class="bg-red-950/40 border border-red-900/40 rounded-lg px-4 py-3 text-sm">
+            <p class="text-red-400 font-semibold mb-2"
+               x-text="`Not found (${importResult.not_found.length})`"></p>
+            <ul class="space-y-0.5 max-h-24 overflow-y-auto">
+              <template x-for="name in importResult.not_found" :key="name">
+                <li class="text-red-300 text-xs" x-text="name"></li>
+              </template>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div x-show="importStatus === 'error'"
+             class="bg-red-950/50 border border-red-900/50 rounded-lg px-4 py-3 text-sm text-red-300">
+          Failed to fetch card data. Check your internet connection and try again.
+        </div>
+
+        <!-- Import mode (only shown after successful fetch) -->
+        <div x-show="importStatus === 'done'" class="space-y-2">
+          <p class="text-xs text-gray-500 uppercase tracking-wider">Import into</p>
+          <label class="flex items-center gap-3 cursor-pointer group">
+            <input type="radio" x-model="importMode" value="replace"
+                   class="accent-purple-500" />
+            <div>
+              <span class="text-sm text-white">Replace current deck</span>
+              <p class="text-xs text-gray-500" x-text="`Overwrites "${currentDeck?.name}"`"></p>
+            </div>
+          </label>
+          <label class="flex items-center gap-3 cursor-pointer group">
+            <input type="radio" x-model="importMode" value="new"
+                   class="accent-purple-500" />
+            <span class="text-sm text-white">Create a new deck</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Footer buttons -->
+      <div class="px-5 py-4 border-t border-gray-800 flex gap-3 flex-shrink-0">
+        <!-- Step 1: Fetch prices -->
+        <button x-show="importStatus !== 'done'"
+                @click="fetchImportPrices()"
+                :disabled="importParsed.length === 0 || importStatus === 'fetching'"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
+                :class="importParsed.length === 0 || importStatus === 'fetching'
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-500 text-white'"
+                x-text="importStatus === 'fetching' ? '↻ Fetching prices…' : `Fetch Prices (${importParsed.length} cards)`">
+        </button>
+
+        <!-- Step 2: Apply -->
+        <button x-show="importStatus === 'done'"
+                @click="applyImport()"
+                :disabled="!importResult?.cards?.length"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors bg-purple-600 hover:bg-purple-500 text-white">
+          Apply Import
+        </button>
+
+        <button @click="showImportModal = false"
+                class="px-4 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- PRIMER MODAL                                                           -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showPrimerModal"
+       x-transition.opacity
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showPrimerModal = false">
+
+    <div class="bg-gray-900 rounded-2xl w-full max-w-2xl border border-gray-700 shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
+        <div>
+          <h2 class="font-bold text-white flex items-center gap-2">📖 Deck Primer</h2>
+          <p class="text-xs text-gray-500 mt-0.5" x-text="currentDeck?.name"></p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button @click="generatePrimer()"
+                  :disabled="primerLoading"
+                  class="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors"
+                  :class="primerLoading ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-indigo-700 hover:bg-indigo-600 text-white'"
+                  x-text="primerLoading ? '✨ Generating…' : currentDeck?.primer ? '↺ Regenerate' : '✨ Generate'">
+          </button>
+          <button @click="showPrimerModal = false" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+        </div>
+      </div>
+
+      <div class="overflow-y-auto flex-1 p-5 space-y-6">
+
+        <!-- Loading -->
+        <div x-show="primerLoading" class="flex flex-col items-center justify-center py-16 text-gray-500">
+          <p class="animate-pulse text-sm">✨ Generating primer…</p>
+        </div>
+
+        <!-- No content yet -->
+        <div x-show="!primerLoading && !currentDeck?.primer"
+             class="flex flex-col items-center justify-center py-16 text-gray-600">
+          <p class="text-3xl mb-3">📖</p>
+          <p class="text-sm">No primer yet.</p>
+          <p class="text-xs mt-1">Click "✨ Generate" above to create one.</p>
+        </div>
+
+        <!-- Primer content -->
+        <div x-show="!primerLoading && currentDeck?.primer" class="space-y-6">
+
+          <!-- How to Play -->
+          <div>
+            <h3 class="text-xs font-semibold text-indigo-400 uppercase tracking-widest mb-3">How to Play</h3>
+            <div class="text-sm text-gray-300 leading-relaxed whitespace-pre-line bg-gray-800/50 rounded-xl p-4 border border-gray-700/50"
+                 x-text="currentDeck?.primer"></div>
+          </div>
+
+          <!-- Build Logic -->
+          <div x-show="currentDeck?.build_logic">
+            <h3 class="text-xs font-semibold text-purple-400 uppercase tracking-widest mb-3">Build Logic</h3>
+            <div class="text-sm text-gray-300 leading-relaxed whitespace-pre-line bg-gray-800/50 rounded-xl p-4 border border-gray-700/50"
+                 x-text="currentDeck?.build_logic"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- AI GENERATE MODAL                                                      -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showGenerateModal"
+       x-transition.opacity
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showGenerateModal = false">
+
+    <div class="bg-gray-900 rounded-2xl w-full max-w-xl border border-gray-700 shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
+        <div>
+          <h2 class="font-bold text-white flex items-center gap-2">✨ Generate Deck with AI</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Describe your deck and Claude will build it for you</p>
+        </div>
+        <button @click="showGenerateModal = false" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 p-5 space-y-4">
+
+        <!-- Description -->
+        <div>
+          <label class="text-xs text-gray-400 uppercase tracking-wider block mb-1.5">Describe your deck</label>
+          <textarea x-model="generateDescription"
+                    :disabled="generateStatus === 'generating'"
+                    @keydown.meta.enter="generateDeck()"
+                    class="w-full bg-gray-800 text-sm text-gray-200 p-3 rounded-lg border border-gray-700 focus:border-indigo-500 focus:outline-none h-32 resize-none placeholder-gray-600 disabled:opacity-50"
+                    placeholder="e.g. A blue-black control deck focused on drawing cards and countering spells, led by a powerful flying creature. Budget around $100."></textarea>
+          <p class="text-xs text-gray-600 mt-1">Be as specific or vague as you like — strategy, budget, playstyle, theme, etc.</p>
+        </div>
+
+        <!-- Optional deck name -->
+        <div>
+          <label class="text-xs text-gray-400 uppercase tracking-wider block mb-1.5">Deck name <span class="text-gray-600 normal-case">(optional)</span></label>
+          <input x-model="generateDeckName"
+                 :disabled="generateStatus === 'generating'"
+                 class="w-full bg-gray-800 text-sm px-3 py-2 rounded-lg border border-gray-700 focus:border-indigo-500 focus:outline-none placeholder-gray-600 disabled:opacity-50"
+                 placeholder="Leave blank to let AI choose" />
+        </div>
+
+        <!-- Generating state -->
+        <div x-show="generateStatus === 'generating'"
+             class="bg-indigo-950/40 border border-indigo-800/50 rounded-lg p-4 text-center">
+          <p class="text-indigo-300 text-sm animate-pulse">✨ Claude is building your deck…</p>
+          <p class="text-xs text-gray-500 mt-1">This takes about 15–30 seconds</p>
+        </div>
+
+        <!-- Result -->
+        <div x-show="generateStatus === 'done' && generateResult" class="space-y-3">
+          <div class="bg-green-950/40 border border-green-800/50 rounded-lg p-4 space-y-2">
+            <p class="text-green-400 font-semibold text-sm" x-text="generateResult?.deck_name"></p>
+            <p class="text-xs text-purple-300">Commander: <span x-text="generateResult?.commander"></span></p>
+            <div class="flex gap-4 mt-2">
+              <div>
+                <span class="text-xs text-gray-500">Cards</span>
+                <p class="text-white font-mono text-sm tabular-nums"
+                   :class="generateResult?.total_cards === 100 ? 'text-green-400' : 'text-yellow-400'"
+                   x-text="`${generateResult?.total_cards}/100`"></p>
+              </div>
+              <div>
+                <span class="text-xs text-gray-500">Est. price</span>
+                <p class="text-green-400 font-mono text-sm tabular-nums"
+                   x-text="`$${generateResult?.total_price?.toFixed(2)}`"></p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Not found -->
+          <div x-show="generateResult?.not_found?.length > 0"
+               class="bg-yellow-950/30 border border-yellow-900/40 rounded-lg px-4 py-3">
+            <p class="text-yellow-400 text-xs font-semibold mb-1"
+               x-text="`${generateResult?.not_found?.length} card(s) couldn't be found on Scryfall and were skipped:`"></p>
+            <ul class="space-y-0.5 max-h-20 overflow-y-auto">
+              <template x-for="name in (generateResult?.not_found ?? [])" :key="name">
+                <li class="text-yellow-300 text-xs" x-text="name"></li>
+              </template>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Error -->
+        <div x-show="generateStatus === 'error'"
+             class="bg-red-950/50 border border-red-900/50 rounded-lg px-4 py-3 text-sm text-red-300"
+             x-text="generateError || 'Something went wrong. Please try again.'">
+        </div>
+
+      </div>
+
+      <!-- Footer -->
+      <div class="px-5 py-4 border-t border-gray-800 flex gap-3 flex-shrink-0">
+        <template x-if="generateStatus !== 'done'">
+          <button @click="generateDeck()"
+                  :disabled="!generateDescription.trim() || generateStatus === 'generating'"
+                  class="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
+                  :class="!generateDescription.trim() || generateStatus === 'generating'
+                    ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-500 text-white'"
+                  x-text="generateStatus === 'generating' ? '✨ Generating…' : '✨ Generate Deck'">
+          </button>
+        </template>
+        <template x-if="generateStatus === 'done'">
+          <button @click="openGeneratedDeck()"
+                  class="flex-1 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors">
+            Open Deck →
+          </button>
+        </template>
+        <button @click="showGenerateModal = false"
+                class="px-4 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
