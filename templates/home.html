@@ -159,12 +159,11 @@
             Open Builder →
           </span>
           {% if deck.share_token %}
-          <a href="/share/{{ deck.share_token }}"
-             onclick="event.preventDefault(); event.stopPropagation(); window.open('/share/{{ deck.share_token }}', '_blank')"
-             class="text-xs text-gray-600 hover:text-gray-300 border border-gray-700 hover:border-gray-500 px-2 py-1.5 rounded-lg transition-colors"
-             title="View share page">
+          <span onclick="event.preventDefault(); event.stopPropagation(); window.open('/share/{{ deck.share_token }}', '_blank')"
+                class="cursor-pointer text-xs text-gray-600 hover:text-gray-300 border border-gray-700 hover:border-gray-500 px-2 py-1.5 rounded-lg transition-colors"
+                title="View share page">
             🔗
-          </a>
+          </span>
           {% endif %}
         </div>
       </div>
