@@ -14,6 +14,8 @@ A web app for building, managing, and analysing Magic: The Gathering Commander d
 - **Budget Tool** — Compare printings to find cheaper versions of cards
 - **Deck Validation** — Checks card count, commander legality, color identity, and duplicates
 - **Import / Export** — Compatible with Moxfield, Archidekt, TappedOut, MTGO, and Arena formats
+- **Deck Statistics** — Mana curve chart, card type breakdown, color pip requirements, and key metrics (avg CMC, land count, creature count) in the Stats tab
+- **Deck Sharing** — Generate a shareable read-only link for any deck; the share page includes commander art, mana curve, full card list with prices, and the deck primer
 
 ---
 
@@ -86,6 +88,15 @@ Open your browser to [http://localhost:8000](http://localhost:8000)
 
 ### Primer & Build Logic
 - Click **📖 Primer** in the toolbar to generate or view the deck's playstyle guide and card choice explanations
+
+### Deck Statistics
+- Click the **Stats** tab in the right panel to see a mana curve chart, card type breakdown, color requirements, and key metrics
+- Stats update live as you add or remove cards
+
+### Sharing a Deck
+- Click **🔗 Share** in the toolbar to generate a permanent share link
+- The link opens a read-only page anyone can view — no account needed
+- The share page shows the commander card art, mana curve, full card list with prices, and the deck primer
 
 ### Tagline
 - The italic line below the header shows the deck's tagline
