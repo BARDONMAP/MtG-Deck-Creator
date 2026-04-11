@@ -28,5 +28,6 @@ class Deck(SQLModel, table=True):
     primer: Optional[str] = None
     build_logic: Optional[str] = None
     tagline: Optional[str] = None
+    share_token: Optional[str] = Field(default=None, index=True)
 
     cards: List[DeckCard] = Relationship(back_populates="deck")

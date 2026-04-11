@@ -65,6 +65,15 @@ document.addEventListener("alpine:init", () => {
     hoverStyle: "",
     hoverTimer: null,
 
+    // Right panel tab
+    rightPanel: "search", // 'search' | 'stats'
+
+    // Share modal
+    showShareModal: false,
+    shareUrl: "",
+    shareCopied: false,
+    shareLoading: false,
+
     BASIC_LANDS: new Set([
       "Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes",
       "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
@@ -621,6 +630,89 @@ document.addEventListener("alpine:init", () => {
     hideHoverCard() {
       clearTimeout(this.hoverTimer);
       this.hoverCard = null;
+    },
+
+    // ── Share ──────────────────────────────────────────────────────────────
+    async shareDeck() {
+      if (!this.currentDeck?.id) return;
+      this.shareLoading = true;
+      this.shareUrl = "";
+      this.shareCopied = false;
+      this.showShareModal = true;
+      try {
+        await this.saveDeck();
+        const r = await fetch(`/api/decks/${this.currentDeck.id}/share`, { method: "POST" });
+        if (!r.ok) throw new Error();
+        const data = await r.json();
+        this.shareUrl = `${window.location.origin}/share/${data.token}`;
+      } finally {
+        this.shareLoading = false;
+      }
+    },
+
+    async copyShareUrl() {
+      if (!this.shareUrl) return;
+      await navigator.clipboard.writeText(this.shareUrl);
+      this.shareCopied = true;
+      setTimeout(() => (this.shareCopied = false), 2000);
+    },
+
+    // ── Deck statistics ────────────────────────────────────────────────────
+    parseMC(manaCost) {
+      if (!manaCost) return 0;
+      const symbols = manaCost.match(/\{([^}]+)\}/g) || [];
+      let cmc = 0;
+      for (const sym of symbols) {
+        const inner = sym.slice(1, -1);
+        if (/^\d+$/.test(inner)) cmc += parseInt(inner);
+        else if (inner !== "X") cmc += 1; // colored, snow, hybrid pips each = 1; X = 0
+      }
+      return cmc;
+    },
+
+    get deckStats() {
+      if (!this.currentDeck?.cards?.length) return null;
+      const nonCmd = this.currentDeck.cards.filter((c) => !c.is_commander);
+      const nonLand = nonCmd.filter((c) => this.getCardType(c.type_line) !== "Land");
+
+      // Mana curve — CMC 0 through 7+
+      const curve = Array(8).fill(0);
+      let totalCMC = 0, cmcCards = 0;
+      for (const card of nonLand) {
+        const cmc = this.parseMC(card.mana_cost);
+        curve[Math.min(cmc, 7)] += card.quantity;
+        totalCMC += cmc * card.quantity;
+        cmcCards += card.quantity;
+      }
+      const avgCMC = cmcCards > 0 ? totalCMC / cmcCards : 0;
+      const maxCurve = Math.max(...curve, 1);
+
+      // Color pips across all non-commander cards
+      const pips = { W: 0, U: 0, B: 0, R: 0, G: 0 };
+      for (const card of nonCmd) {
+        if (!card.mana_cost) continue;
+        const symbols = card.mana_cost.match(/\{([^}]+)\}/g) || [];
+        for (const sym of symbols) {
+          const inner = sym.slice(1, -1);
+          if (Object.prototype.hasOwnProperty.call(pips, inner)) pips[inner] += card.quantity;
+        }
+      }
+      const maxPips = Math.max(...Object.values(pips), 1);
+      const pipEntries = Object.entries(pips)
+        .filter(([, v]) => v > 0)
+        .map(([color, count]) => ({ color, count }));
+
+      // Card type counts (reuse cardsByType which excludes commander)
+      const typeOrder = ["Creature", "Instant", "Sorcery", "Enchantment", "Artifact", "Planeswalker", "Land", "Other"];
+      const typeData = typeOrder
+        .map((type) => ({
+          type,
+          count: (this.cardsByType[type] || []).reduce((s, c) => s + c.quantity, 0),
+        }))
+        .filter((t) => t.count > 0);
+      const maxType = Math.max(...typeData.map((t) => t.count), 1);
+
+      return { curve, avgCMC, maxCurve, pips, maxPips, pipEntries, typeData, maxType };
     },
 
     colorClass(color) {

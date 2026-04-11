@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  {% if deck %}
+  <title>{{ deck.name }} — MTG Commander Deck</title>
+  <meta name="description" content="{{ deck.tagline or ((deck.commander_name ~ ' Commander Deck') if deck.commander_name else deck.name) }}" />
+  {% else %}
+  <title>Deck Not Found</title>
+  {% endif %}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 5px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+{% if not deck %}
+<!-- ── 404 ──────────────────────────────────────────────────────────────── -->
+<div class="flex flex-col items-center justify-center min-h-screen text-center p-8">
+  <p class="text-6xl mb-4">🔍</p>
+  <h1 class="text-2xl font-bold text-white mb-2">Deck Not Found</h1>
+  <p class="text-gray-500 mb-6">This share link may have expired or been removed.</p>
+  <a href="/" class="bg-purple-600 hover:bg-purple-500 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors">
+    Build Your Own Deck →
+  </a>
+</div>
+
+{% else %}
+<!-- ── Nav ──────────────────────────────────────────────────────────────── -->
+<nav class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-10">
+  <div class="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <span class="text-lg">⚔️</span>
+      <span class="font-bold text-purple-400 text-sm">Commander Deck Builder</span>
+    </div>
+    <a href="/"
+       class="text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg font-semibold transition-colors">
+      Build Your Own →
+    </a>
+  </div>
+</nav>
+
+<div class="max-w-5xl mx-auto px-6 py-8">
+
+  <!-- ── Deck header ─────────────────────────────────────────────────────── -->
+  <div class="flex items-start gap-6 mb-8">
+
+    <!-- Commander card art -->
+    {% if commander and commander.image_uri %}
+    <img src="{{ commander.image_uri }}" alt="{{ commander.card_name }}"
+         class="w-36 rounded-xl shadow-2xl flex-shrink-0 hidden sm:block" />
+    {% endif %}
+
+    <div class="flex-1 min-w-0">
+      <h1 class="text-3xl font-bold text-white leading-tight">{{ deck.name }}</h1>
+      {% if deck.tagline %}
+      <p class="text-gray-400 italic mt-1 text-sm">{{ deck.tagline }}</p>
+      {% endif %}
+
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-2 mt-4">
+        {% if commander %}
+        <span class="text-purple-300 font-medium">♛ {{ commander.card_name }}</span>
+        {% endif %}
+        <span class="tabular-nums text-sm {{ 'text-green-400 font-bold' if card_count == 100 else 'text-yellow-400' }}">
+          {{ card_count }}/100 cards
+        </span>
+        <span class="text-green-400 font-mono text-sm">${{ "%.2f"|format(total_price) }}</span>
+      </div>
+
+      <!-- Mana curve -->
+      <div class="mt-5">
+        <p class="text-xs text-gray-600 uppercase tracking-wider mb-2">
+          Mana Curve &nbsp;·&nbsp; Avg CMC {{ avg_cmc }}
+        </p>
+        <div class="flex items-end gap-1" style="height:56px">
+          {% for i in range(8) %}
+          {% set count = curve[i] %}
+          {% set bar_h = ((count / max_curve) * 40)|int %}
+          <div class="flex flex-col items-center gap-0.5 w-8 flex-shrink-0">
+            <span class="text-xs leading-none tabular-nums {{ 'text-gray-400' if count > 0 else 'text-transparent' }}">
+              {{ count if count > 0 else 0 }}
+            </span>
+            <div class="w-full rounded-t {{ 'bg-blue-500' if i <= 2 else ('bg-purple-500' if i <= 4 else 'bg-red-500') }}"
+                 style="height:{{ [bar_h, 3]|max if count > 0 else 0 }}px"></div>
+            <span class="text-xs text-gray-600 leading-none">{{ i if i < 7 else '7+' }}</span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Card list ───────────────────────────────────────────────────────── -->
+  <div class="columns-1 md:columns-2 gap-6">
+    {% for type_name in type_order %}
+    {% set group = card_groups[type_name] %}
+    {% if group %}
+    <div class="break-inside-avoid mb-6">
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+        <span>{{ type_name }}</span>
+        <span class="text-gray-600 font-normal normal-case tracking-normal">
+          ({{ group|sum(attribute='quantity') }})
+        </span>
+        <span class="ml-auto text-gray-700 font-normal normal-case tracking-normal font-mono">
+          ${{ "%.2f"|format(group_prices[type_name]) }}
+        </span>
+      </h3>
+      <div class="space-y-0.5">
+        {% for card in group %}
+        <div class="flex items-center gap-3 bg-gray-800/40 hover:bg-gray-800/70 rounded-lg px-3 py-1.5 transition-colors">
+          <span class="text-xs text-gray-600 w-4 text-center flex-shrink-0">
+            {{ card.quantity if card.quantity > 1 else '' }}
+          </span>
+          <span class="text-sm flex-1 truncate">{{ card.card_name }}</span>
+          <span class="text-xs text-gray-700 hidden sm:block flex-shrink-0">{{ card.mana_cost or '' }}</span>
+          <span class="text-xs font-mono flex-shrink-0 {{ 'text-green-400' if card.usd_price else 'text-gray-700' }}">
+            {% if card.usd_price %}${{ "%.2f"|format(card.usd_price) }}{% else %}—{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- ── Primer ──────────────────────────────────────────────────────────── -->
+  {% if deck.primer %}
+  <div class="mt-8 pt-6 border-t border-gray-800">
+    <h3 class="text-sm font-semibold text-gray-300 mb-3">Deck Primer</h3>
+    <p class="text-sm text-gray-500 leading-relaxed whitespace-pre-wrap max-w-3xl">{{ deck.primer }}</p>
+  </div>
+  {% endif %}
+
+  <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+  <div class="mt-10 pt-5 border-t border-gray-800/60 text-center">
+    <p class="text-xs text-gray-700">
+      Shared with ⚔️ Commander Deck Builder ·
+      <a href="/" class="text-purple-500 hover:text-purple-400 transition-colors">Build your own deck</a>
+    </p>
+  </div>
+
+</div>
+{% endif %}
+
+</body>
+</html>

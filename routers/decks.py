@@ -1,4 +1,5 @@
 import json
+import secrets
 from datetime import datetime
 from typing import Optional
 
@@ -233,3 +234,16 @@ def export_deck(deck_id: int, session: Session = Depends(get_session)):
     lines.append(f"// {total_cards} cards  |  ${total_price:.2f} total")
 
     return {"text": "\n".join(lines)}
+
+
+@router.post("/{deck_id}/share")
+def share_deck(deck_id: int, session: Session = Depends(get_session)):
+    deck = session.get(Deck, deck_id)
+    if not deck:
+        raise HTTPException(status_code=404, detail="Deck not found")
+    if not deck.share_token:
+        deck.share_token = secrets.token_urlsafe(12)
+        session.add(deck)
+        session.commit()
+        session.refresh(deck)
+    return {"token": deck.share_token}

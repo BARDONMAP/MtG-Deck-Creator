@@ -9,7 +9,7 @@ def create_db():
     SQLModel.metadata.create_all(engine)
     # Migrate: add new columns if they don't exist yet
     with engine.connect() as conn:
-        for col in ("primer TEXT", "build_logic TEXT", "tagline TEXT"):
+        for col in ("primer TEXT", "build_logic TEXT", "tagline TEXT", "share_token TEXT"):
             try:
                 conn.execute(text(f"ALTER TABLE deck ADD COLUMN {col}"))
                 conn.commit()

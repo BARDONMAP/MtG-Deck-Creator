@@ -167,6 +167,11 @@
                   class="text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600 px-3 py-1.5 rounded-lg transition-colors">
             ↑ Import
           </button>
+          <button @click="shareDeck()"
+                  x-show="currentDeck"
+                  class="text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600 px-3 py-1.5 rounded-lg transition-colors">
+            🔗 Share
+          </button>
         </div>
       </header>
 
@@ -347,9 +352,26 @@
         </main>
 
         <!-- ─────────────────────────────────────────────────────────────── -->
-        <!-- RIGHT PANEL: SEARCH + CARD PREVIEW                             -->
+        <!-- RIGHT PANEL: SEARCH + STATS                                    -->
         <!-- ─────────────────────────────────────────────────────────────── -->
         <aside class="w-80 flex-shrink-0 bg-gray-900 border-l border-gray-800 flex flex-col">
+
+          <!-- Tab bar -->
+          <div class="flex flex-shrink-0">
+            <button @click="rightPanel = 'search'"
+                    class="flex-1 py-2.5 text-xs font-semibold tracking-wide uppercase transition-colors border-b-2"
+                    :class="rightPanel === 'search' ? 'text-purple-400 border-purple-500' : 'text-gray-500 border-gray-800 hover:text-gray-300'">
+              Search
+            </button>
+            <button @click="rightPanel = 'stats'"
+                    class="flex-1 py-2.5 text-xs font-semibold tracking-wide uppercase transition-colors border-b-2"
+                    :class="rightPanel === 'stats' ? 'text-purple-400 border-purple-500' : 'text-gray-500 border-gray-800 hover:text-gray-300'">
+              Stats
+            </button>
+          </div>
+
+          <!-- ── SEARCH TAB ─────────────────────────────────────────────── -->
+          <div x-show="rightPanel === 'search'" class="flex flex-col flex-1 min-h-0">
 
           <!-- Search input -->
           <div class="p-3 border-b border-gray-800 relative">
@@ -493,7 +515,147 @@
               </div>
             </div>
           </div>
+
+          </div><!-- end search tab -->
+
+          <!-- ── STATS TAB ──────────────────────────────────────────────── -->
+          <div x-show="rightPanel === 'stats'" class="flex-1 overflow-y-auto p-4 space-y-5">
+
+            <!-- Empty state -->
+            <div x-show="!deckStats" class="flex flex-col items-center justify-center h-40 text-gray-700">
+              <p class="text-4xl mb-2">📊</p>
+              <p class="text-sm text-center">Add cards to see statistics</p>
+            </div>
+
+            <template x-if="deckStats">
+              <div class="space-y-6">
+
+                <!-- Key metrics -->
+                <div class="grid grid-cols-3 gap-2">
+                  <div class="bg-gray-800 rounded-xl p-3 text-center">
+                    <p class="text-xl font-bold text-purple-400 tabular-nums" x-text="deckStats.avgCMC.toFixed(2)"></p>
+                    <p class="text-xs text-gray-500 mt-1">Avg CMC</p>
+                  </div>
+                  <div class="bg-gray-800 rounded-xl p-3 text-center">
+                    <p class="text-xl font-bold text-blue-400 tabular-nums"
+                       x-text="(deckStats.typeData.find(t => t.type === 'Land') || {count:0}).count"></p>
+                    <p class="text-xs text-gray-500 mt-1">Lands</p>
+                  </div>
+                  <div class="bg-gray-800 rounded-xl p-3 text-center">
+                    <p class="text-xl font-bold text-green-400 tabular-nums"
+                       x-text="(deckStats.typeData.find(t => t.type === 'Creature') || {count:0}).count"></p>
+                    <p class="text-xs text-gray-500 mt-1">Creatures</p>
+                  </div>
+                </div>
+
+                <!-- Mana Curve -->
+                <div>
+                  <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Mana Curve</p>
+                  <div class="flex items-end gap-1" style="height:88px">
+                    <template x-for="(count, idx) in deckStats.curve" :key="idx">
+                      <div class="flex-1 flex flex-col items-center gap-0.5 min-w-0">
+                        <span class="text-xs leading-none tabular-nums"
+                              :class="count > 0 ? 'text-gray-300' : 'text-transparent'"
+                              x-text="count || '0'"></span>
+                        <div class="w-full rounded-t transition-all duration-300"
+                             :class="idx <= 2 ? 'bg-blue-500' : idx <= 4 ? 'bg-purple-500' : 'bg-red-500'"
+                             :style="`height:${Math.max((count/deckStats.maxCurve)*64, count>0?3:0)}px`"></div>
+                        <span class="text-xs text-gray-600 leading-none" x-text="idx < 7 ? idx : '7+'"></span>
+                      </div>
+                    </template>
+                  </div>
+                  <div class="flex justify-between mt-2 text-xs text-gray-600">
+                    <span>Low</span><span class="text-gray-700">──</span><span>High</span>
+                  </div>
+                </div>
+
+                <!-- Card Types -->
+                <div>
+                  <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Card Types</p>
+                  <div class="space-y-2">
+                    <template x-for="t in deckStats.typeData" :key="t.type">
+                      <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500 w-20 truncate flex-shrink-0" x-text="t.type"></span>
+                        <div class="flex-1 bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                          <div class="h-full rounded-full bg-purple-500 transition-all duration-300"
+                               :style="`width:${(t.count/deckStats.maxType)*100}%`"></div>
+                        </div>
+                        <span class="text-xs text-gray-400 tabular-nums w-5 text-right flex-shrink-0"
+                              x-text="t.count"></span>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <!-- Color Requirements -->
+                <div x-show="deckStats.pipEntries.length > 0">
+                  <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Color Requirements</p>
+                  <div class="space-y-2">
+                    <template x-for="pip in deckStats.pipEntries" :key="pip.color">
+                      <div class="flex items-center gap-2">
+                        <span class="w-5 h-5 rounded-full text-xs flex items-center justify-center font-bold flex-shrink-0"
+                              :class="colorClass(pip.color)" x-text="pip.color"></span>
+                        <div class="flex-1 bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                          <div class="h-full rounded-full transition-all duration-300"
+                               :class="{W:'bg-yellow-200',U:'bg-blue-500',B:'bg-gray-400',R:'bg-red-500',G:'bg-green-500'}[pip.color]"
+                               :style="`width:${(pip.count/deckStats.maxPips)*100}%`"></div>
+                        </div>
+                        <span class="text-xs text-gray-400 tabular-nums w-5 text-right flex-shrink-0"
+                              x-text="Math.round(pip.count)"></span>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+              </div>
+            </template>
+          </div><!-- end stats tab -->
+
         </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- SHARE MODAL                                                            -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showShareModal"
+       x-transition:enter="transition ease-out duration-150"
+       x-transition:enter-start="opacity-0"
+       x-transition:enter-end="opacity-100"
+       x-transition:leave="transition ease-in duration-100"
+       x-transition:leave-start="opacity-100"
+       x-transition:leave-end="opacity-0"
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showShareModal = false">
+    <div class="bg-gray-900 rounded-2xl w-full max-w-md border border-gray-700 shadow-2xl p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="font-bold text-white">Share Deck</h2>
+        <button @click="showShareModal = false" class="text-gray-500 hover:text-gray-300">✕</button>
+      </div>
+
+      <!-- Loading -->
+      <div x-show="shareLoading" class="flex items-center gap-3 py-4 text-gray-400">
+        <span class="animate-pulse">↻</span>
+        <span class="text-sm">Generating link…</span>
+      </div>
+
+      <!-- URL row -->
+      <div x-show="!shareLoading && shareUrl" class="space-y-3">
+        <p class="text-xs text-gray-500">Anyone with this link can view a read-only snapshot of your deck.</p>
+        <div class="flex gap-2">
+          <input :value="shareUrl" readonly
+                 class="flex-1 bg-gray-800 text-xs px-3 py-2 rounded-lg border border-gray-700 text-gray-300 select-all cursor-text truncate" />
+          <button @click="copyShareUrl()"
+                  class="flex-shrink-0 text-xs px-4 py-2 rounded-lg font-semibold transition-colors"
+                  :class="shareCopied ? 'bg-green-700 text-green-200' : 'bg-purple-600 hover:bg-purple-500 text-white'"
+                  x-text="shareCopied ? '✓ Copied!' : 'Copy'">
+          </button>
+        </div>
+        <a :href="shareUrl" target="_blank"
+           class="block text-xs text-purple-400 hover:text-purple-300 transition-colors">
+          Open share page →
+        </a>
       </div>
     </div>
   </div>
