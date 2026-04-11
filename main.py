@@ -55,7 +55,32 @@ app.include_router(ai.router)
 
 
 @app.get("/")
-async def root(request: Request):
+def home(request: Request):
+    with Session(engine) as session:
+        all_decks = session.exec(select(Deck)).all()
+        deck_data = []
+        for deck in all_decks:
+            cards = session.exec(select(DeckCard).where(DeckCard.deck_id == deck.id)).all()
+            commander = next((c for c in cards if c.is_commander), None)
+            card_count = sum(c.quantity for c in cards)
+            total_price = sum((c.usd_price or 0) * c.quantity for c in cards)
+            deck_data.append({
+                "id": deck.id,
+                "name": deck.name,
+                "commander_name": deck.commander_name,
+                "commander_image": commander.image_uri if commander else None,
+                "card_count": card_count,
+                "total_price": round(total_price, 2),
+                "tagline": deck.tagline,
+                "updated_at": deck.updated_at,
+                "share_token": deck.share_token,
+            })
+        deck_data.sort(key=lambda d: d["updated_at"], reverse=True)
+    return templates.TemplateResponse(request, "home.html", {"decks": deck_data})
+
+
+@app.get("/builder")
+async def builder(request: Request):
     return templates.TemplateResponse(request, "index.html")
 
 

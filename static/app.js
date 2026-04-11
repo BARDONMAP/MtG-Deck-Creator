@@ -101,11 +101,22 @@ document.addEventListener("alpine:init", () => {
     // ── Init ───────────────────────────────────────────────────────────────
     async init() {
       await this.fetchSavedDecks();
-      if (this.savedDecks.length > 0) {
-        await this.loadDeck(this.savedDecks[0].id);
-      } else {
+      const params = new URLSearchParams(window.location.search);
+      const deckId = params.get("deck");
+      const isNew   = params.get("new") === "1";
+      const doGen   = params.get("generate") === "1";
+      const doImport = params.get("import") === "1";
+
+      if (isNew || this.savedDecks.length === 0) {
         await this.createNewDeck();
+      } else if (deckId) {
+        await this.loadDeck(parseInt(deckId));
+      } else {
+        await this.loadDeck(this.savedDecks[0].id);
       }
+
+      if (doGen)    this.openGenerateModal();
+      if (doImport) this.openImportModal();
     },
 
     // ── Deck management ────────────────────────────────────────────────────

@@ -71,6 +71,20 @@ Open your browser to [http://localhost:8000](http://localhost:8000)
 
 ---
 
+## Routes
+
+| Path | Description |
+|------|-------------|
+| `/` | Home page — deck grid, feature overview, entry point |
+| `/builder` | Deck builder app |
+| `/builder?deck={id}` | Open builder with a specific deck loaded |
+| `/builder?new=1` | Open builder and immediately create a new deck |
+| `/builder?generate=1` | Open builder with the AI generation modal open |
+| `/builder?import=1` | Open builder with the import modal open |
+| `/share/{token}` | Read-only public deck page |
+
+---
+
 ## Usage
 
 ### Building a deck manually
