@@ -1,4 +1,4 @@
-app = "mtg-deck-builder"
+app = "bardonmap-mtg-commander"
 primary_region = "iad"
 
 [build]
