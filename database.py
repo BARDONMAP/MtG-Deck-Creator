@@ -1,7 +1,8 @@
 from sqlalchemy import text
 from sqlmodel import create_engine, SQLModel, Session
 
-DATABASE_URL = "sqlite:///./decks.db"
+import os
+DATABASE_URL = f"sqlite:///{os.getenv('DB_PATH', './decks.db')}"
 engine = create_engine(DATABASE_URL, echo=False)
 
 
