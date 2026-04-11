@@ -459,18 +459,23 @@
                 </div>
               </div>
 
-              <!-- Legality + color identity -->
-              <div class="flex flex-wrap gap-2 items-center">
-                <span class="text-xs px-2 py-1 rounded-full font-medium"
-                      :class="selectedCard?.is_commander_legal
-                        ? 'bg-green-900/60 text-green-300 border border-green-800'
-                        : 'bg-red-900/60 text-red-300 border border-red-800'"
-                      x-text="selectedCard?.is_commander_legal ? '✓ Commander Legal' : '✕ Not Legal'">
-                </span>
-                <span x-show="selectedCard?.can_be_commander"
-                      class="text-xs px-2 py-1 rounded-full bg-purple-900/60 text-purple-300 border border-purple-800 font-medium">
-                  ♛ Can Be Commander
-                </span>
+              <!-- Format legality grid -->
+              <div>
+                <div class="flex items-center justify-between mb-1.5">
+                  <p class="text-xs text-gray-600 uppercase tracking-wider">Format Legality</p>
+                  <span x-show="selectedCard?.can_be_commander"
+                        class="text-xs px-2 py-0.5 rounded-full bg-purple-900/60 text-purple-300 border border-purple-800 font-medium">
+                    ♛ Commander
+                  </span>
+                </div>
+                <div class="grid grid-cols-3 gap-1">
+                  <template x-for="fmt in FORMATS" :key="fmt.key">
+                    <div class="text-center px-1 py-1.5 rounded text-xs font-medium border"
+                         :class="legalityClass(selectedCard?.legalities?.[fmt.key])">
+                      <div class="leading-none truncate" x-text="fmt.label"></div>
+                    </div>
+                  </template>
+                </div>
               </div>
 
               <!-- Color identity pips -->
@@ -513,6 +518,60 @@
                         x-text="isCommander(selectedCard?.name) ? '♛' : '♛ CMD'">
                 </button>
               </div>
+
+              <!-- ── Rulings ─────────────────────────────────────────────── -->
+              <div class="pt-1 border-t border-gray-800/50">
+                <button @click="showRulings = !showRulings; if (showRulings && cardRulings === null) fetchRulings()"
+                        class="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors w-full">
+                  <span x-text="showRulings ? '▾' : '▸'" class="text-gray-600"></span>
+                  <span>Rulings</span>
+                  <span x-show="cardRulings?.length > 0"
+                        class="text-gray-600" x-text="`(${cardRulings?.length})`"></span>
+                </button>
+                <div x-show="showRulings" class="mt-2 space-y-2">
+                  <div x-show="cardRulingsLoading" class="text-xs text-gray-600 italic animate-pulse">Loading…</div>
+                  <template x-if="!cardRulingsLoading && cardRulings !== null">
+                    <div class="space-y-2">
+                      <p x-show="cardRulings.length === 0"
+                         class="text-xs text-gray-700 italic">No rulings for this card.</p>
+                      <template x-for="ruling in cardRulings" :key="ruling.published_at + ruling.comment">
+                        <div class="bg-gray-800/50 rounded-lg p-2.5 space-y-1">
+                          <p class="text-xs text-gray-600" x-text="ruling.published_at"></p>
+                          <p class="text-xs text-gray-400 leading-relaxed" x-text="ruling.comment"></p>
+                        </div>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
+              <!-- ── Similar Cards ───────────────────────────────────────── -->
+              <div x-show="similarCardsLoading || similarCards.length > 0"
+                   class="pt-1 border-t border-gray-800/50">
+                <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Similar Cards</p>
+                <div x-show="similarCardsLoading" class="text-xs text-gray-600 italic animate-pulse">Finding similar cards…</div>
+                <div class="space-y-1">
+                  <template x-for="card in similarCards" :key="card.id">
+                    <div @click="selectCardByName(card.name)"
+                         @mouseenter="showHoverCard(card, $event)" @mouseleave="hideHoverCard()"
+                         class="flex items-center gap-2 bg-gray-800/40 hover:bg-gray-800 rounded-lg px-2.5 py-1.5 cursor-pointer transition-colors group">
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-medium truncate group-hover:text-purple-300 transition-colors"
+                           x-text="card.name"></p>
+                        <p class="text-xs text-gray-600 truncate" x-text="card.type_line"></p>
+                      </div>
+                      <div class="text-right flex-shrink-0">
+                        <p class="text-xs font-mono tabular-nums"
+                           :class="card.prices?.usd ? 'text-green-400' : 'text-gray-700'"
+                           x-text="card.prices?.usd ? `$${card.prices.usd}` : '—'"></p>
+                        <p x-show="isInDeck(card.name)"
+                           class="text-xs text-green-600 leading-none mt-0.5">✓</p>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+
             </div>
           </div>
 

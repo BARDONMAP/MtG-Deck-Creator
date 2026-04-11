@@ -74,6 +74,22 @@ document.addEventListener("alpine:init", () => {
     shareCopied: false,
     shareLoading: false,
 
+    // Card preview enhancements
+    cardRulings: null,       // null = not fetched, [] = fetched empty, [...] = fetched with rulings
+    cardRulingsLoading: false,
+    showRulings: false,
+    similarCards: [],
+    similarCardsLoading: false,
+
+    FORMATS: [
+      { key: "standard",  label: "Standard"  },
+      { key: "pioneer",   label: "Pioneer"   },
+      { key: "modern",    label: "Modern"    },
+      { key: "legacy",    label: "Legacy"    },
+      { key: "commander", label: "Commander" },
+      { key: "pauper",    label: "Pauper"    },
+    ],
+
     BASIC_LANDS: new Set([
       "Plains", "Island", "Swamp", "Mountain", "Forest", "Wastes",
       "Snow-Covered Plains", "Snow-Covered Island", "Snow-Covered Swamp",
@@ -173,9 +189,15 @@ document.addEventListener("alpine:init", () => {
       this.autocompleteResults = [];
       this.isSearching = true;
       this.selectedCard = null;
+      this.cardRulings = null;
+      this.showRulings = false;
+      this.similarCards = [];
       try {
         const r = await fetch(`/api/cards/named?name=${encodeURIComponent(name)}`);
-        if (r.ok) this.selectedCard = await r.json();
+        if (r.ok) {
+          this.selectedCard = await r.json();
+          this.fetchSimilarCards(this.selectedCard.id);
+        }
       } finally {
         this.isSearching = false;
       }
@@ -630,6 +652,39 @@ document.addEventListener("alpine:init", () => {
     hideHoverCard() {
       clearTimeout(this.hoverTimer);
       this.hoverCard = null;
+    },
+
+    // ── Card preview extras ────────────────────────────────────────────────
+    async fetchRulings() {
+      if (!this.selectedCard?.id) return;
+      this.cardRulingsLoading = true;
+      try {
+        const r = await fetch(`/api/cards/rulings?id=${encodeURIComponent(this.selectedCard.id)}`);
+        const data = await r.json();
+        this.cardRulings = data.rulings ?? [];
+      } finally {
+        this.cardRulingsLoading = false;
+      }
+    },
+
+    async fetchSimilarCards(id) {
+      this.similarCards = [];
+      this.similarCardsLoading = true;
+      try {
+        const r = await fetch(`/api/cards/similar?id=${encodeURIComponent(id)}`);
+        const data = await r.json();
+        this.similarCards = data.cards ?? [];
+      } finally {
+        this.similarCardsLoading = false;
+      }
+    },
+
+    legalityClass(status) {
+      return {
+        legal:      "bg-green-900/50 text-green-400 border border-green-900",
+        banned:     "bg-red-900/50 text-red-400 border border-red-900",
+        restricted: "bg-amber-900/50 text-amber-400 border border-amber-900",
+      }[status] ?? "bg-gray-800/50 text-gray-600 border border-gray-800";
     },
 
     // ── Share ──────────────────────────────────────────────────────────────

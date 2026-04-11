@@ -16,6 +16,9 @@ A web app for building, managing, and analysing Magic: The Gathering Commander d
 - **Import / Export** — Compatible with Moxfield, Archidekt, TappedOut, MTGO, and Arena formats
 - **Deck Statistics** — Mana curve chart, card type breakdown, color pip requirements, and key metrics (avg CMC, land count, creature count) in the Stats tab
 - **Deck Sharing** — Generate a shareable read-only link for any deck; the share page includes commander art, mana curve, full card list with prices, and the deck primer
+- **Format Legality Grid** — Card preview shows legal/banned/restricted status across Standard, Pioneer, Modern, Legacy, Commander, and Pauper
+- **Official Rulings** — Expandable rulings panel in the card preview, loaded on demand from Scryfall
+- **Similar Cards** — Auto-populated list of thematically related cards (matched by keyword and type, ranked by EDHREC popularity) with hover preview and one-click selection
 
 ---
 
@@ -92,6 +95,11 @@ Open your browser to [http://localhost:8000](http://localhost:8000)
 ### Deck Statistics
 - Click the **Stats** tab in the right panel to see a mana curve chart, card type breakdown, color requirements, and key metrics
 - Stats update live as you add or remove cards
+
+### Card Preview Panel
+- Search for any card to see its image, oracle text, pricing, and format legality across 6 formats
+- Click **▸ Rulings** to expand official WotC rulings for that card (loaded on demand)
+- **Similar Cards** appears automatically below — cards matched by keyword ability and type, sorted by EDHREC popularity; hover any card for a preview tooltip, click to select it
 
 ### Sharing a Deck
 - Click **🔗 Share** in the toolbar to generate a permanent share link

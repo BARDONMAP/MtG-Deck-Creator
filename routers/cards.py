@@ -116,6 +116,51 @@ async def get_printings(name: str):
     return {"printings": printings}
 
 
+@router.get("/rulings")
+async def get_rulings(id: str):
+    data = await scryfall_get(f"/cards/{id}/rulings")
+    rulings = [
+        {"published_at": r["published_at"], "comment": r["comment"]}
+        for r in data.get("data", [])
+    ]
+    return {"rulings": rulings}
+
+
+@router.get("/similar")
+async def similar_cards(id: str):
+    card = await scryfall_get(f"/cards/{id}")
+    name = card["name"]
+    type_line = card.get("type_line", "")
+    color_identity = card.get("color_identity", [])
+    keywords = card.get("keywords", [])
+
+    id_str = "".join(sorted(color_identity))
+    color_q = f"color<={id_str}" if id_str else "color:colorless"
+
+    primary = next(
+        (t.lower() for t in ["Creature", "Instant", "Sorcery", "Enchantment", "Artifact", "Planeswalker"]
+         if t in type_line),
+        None,
+    )
+
+    queries = []
+    if keywords:
+        queries.append(f'keyword:"{keywords[0]}" {color_q} legal:commander -!!"{name}"')
+    if primary:
+        queries.append(f't:{primary} {color_q} legal:commander -!!"{name}"')
+
+    for q in queries:
+        try:
+            data = await scryfall_get("/cards/search", {"q": q, "order": "edhrec", "dir": "desc"})
+            cards = [_format_card(c) for c in data.get("data", [])[:5]]
+            if cards:
+                return {"cards": cards}
+        except HTTPException:
+            continue
+
+    return {"cards": []}
+
+
 class _ImportCard(BaseModel):
     name: str
     quantity: int = 1
