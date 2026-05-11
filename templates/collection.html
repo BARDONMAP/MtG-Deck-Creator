@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Collection — MTG</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+  </style>
+</head>
+<body class="h-full bg-gray-950 text-gray-100 overflow-hidden"
+      x-data="collectionManager" x-init="init()" x-cloak>
+
+  <div class="flex h-screen">
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- LEFT PANEL: Search to add cards                                    -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <aside class="w-80 flex-shrink-0 bg-gray-900 border-r border-gray-800 flex flex-col">
+
+      <!-- Title -->
+      <div class="px-4 py-4 border-b border-gray-800">
+        <a href="/" class="flex items-center gap-2 group">
+          <span class="text-2xl">⚔️</span>
+          <div>
+            <h1 class="font-bold text-purple-400 leading-tight group-hover:text-purple-300 transition-colors">Commander</h1>
+            <p class="text-xs text-gray-500">Deck Builder</p>
+          </div>
+        </a>
+        <div class="flex gap-3 mt-3 text-xs">
+          <a href="/" class="text-gray-500 hover:text-gray-300 transition-colors">Home</a>
+          <a href="/builder" class="text-gray-500 hover:text-gray-300 transition-colors">Builder</a>
+          <span class="text-purple-400 font-medium">📦 Collection</span>
+        </div>
+      </div>
+
+      <!-- Search input -->
+      <div class="p-3 border-b border-gray-800 relative">
+        <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Add Cards</p>
+        <div class="relative">
+          <input x-model="searchQuery"
+                 @input="onSearchInput()"
+                 @keydown.escape="showAutocomplete = false; searchQuery = ''; selectedCard = null"
+                 @keydown.enter="autocompleteResults.length > 0 && selectCardByName(autocompleteResults[0])"
+                 @click.away="showAutocomplete = false"
+                 class="w-full bg-gray-800 text-sm px-3 py-2 pr-8 rounded-lg border border-gray-700 focus:border-purple-500 focus:outline-none placeholder-gray-600 transition-colors"
+                 placeholder="Search cards to add…" />
+          <button x-show="searchQuery"
+                  @click="searchQuery = ''; selectedCard = null; showAutocomplete = false"
+                  class="absolute right-2.5 top-2.5 text-gray-500 hover:text-gray-300 text-xs">✕</button>
+        </div>
+
+        <!-- Autocomplete -->
+        <div x-show="showAutocomplete && autocompleteResults.length > 0"
+             class="absolute left-3 right-3 top-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto">
+          <template x-for="name in autocompleteResults" :key="name">
+            <div @click="selectCardByName(name)"
+                 class="px-3 py-2 text-sm hover:bg-gray-700 cursor-pointer flex items-center justify-between transition-colors">
+              <span x-text="name"></span>
+              <span x-show="isInCollection(name)" class="text-xs text-green-500 ml-2 flex-shrink-0">✓</span>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Card preview -->
+      <div class="flex-1 overflow-y-auto p-3">
+
+        <!-- Loading -->
+        <div x-show="isSearching" class="flex flex-col items-center justify-center h-32 text-gray-600">
+          <div class="text-2xl mb-2 animate-pulse">🔄</div>
+          <p class="text-sm">Loading…</p>
+        </div>
+
+        <!-- Empty state -->
+        <div x-show="!selectedCard && !isSearching" class="flex flex-col items-center justify-center h-48 text-gray-700 text-center">
+          <p class="text-3xl mb-2">🔍</p>
+          <p class="text-sm">Search for cards above<br>to add them to your collection</p>
+        </div>
+
+        <!-- Card details -->
+        <div x-show="selectedCard && !isSearching" class="space-y-3">
+
+          <img x-show="selectedCard?.image_uri"
+               :src="selectedCard?.image_uri"
+               :alt="selectedCard?.name"
+               class="w-full rounded-xl shadow-lg" />
+
+          <div>
+            <h3 class="font-bold text-white text-sm" x-text="selectedCard?.name"></h3>
+            <p class="text-xs text-gray-400 mt-0.5" x-text="selectedCard?.type_line"></p>
+          </div>
+
+          <p class="text-xs text-gray-500 leading-relaxed bg-gray-800/50 rounded-lg p-2"
+             x-text="selectedCard?.oracle_text"
+             x-show="selectedCard?.oracle_text"></p>
+
+          <!-- Price -->
+          <div class="bg-gray-800 rounded-lg p-3 space-y-1.5">
+            <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">Pricing</p>
+            <div class="flex justify-between items-center">
+              <span class="text-xs text-gray-400">Normal (USD)</span>
+              <span class="text-sm font-mono font-semibold"
+                    :class="selectedCard?.prices?.usd ? 'text-green-400' : 'text-gray-600'"
+                    x-text="selectedCard?.prices?.usd ? `$${selectedCard.prices.usd}` : 'N/A'"></span>
+            </div>
+            <div class="flex justify-between items-center" x-show="selectedCard?.prices?.usd_foil">
+              <span class="text-xs text-gray-400">Foil (USD)</span>
+              <span class="text-sm font-mono font-semibold text-amber-400"
+                    x-text="`$${selectedCard?.prices?.usd_foil}`"></span>
+            </div>
+          </div>
+
+          <!-- Collection status -->
+          <div class="bg-gray-800/60 rounded-lg p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-gray-500">In your collection</span>
+              <span x-show="isInCollection(selectedCard?.name)"
+                    class="text-xs text-green-400 font-semibold"
+                    x-text="`${collectionQuantity(selectedCard?.name)} cop${collectionQuantity(selectedCard?.name) === 1 ? 'y' : 'ies'}`"></span>
+              <span x-show="!isInCollection(selectedCard?.name)"
+                    class="text-xs text-gray-600">Not owned</span>
+            </div>
+
+            <!-- Quantity selector for adding -->
+            <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1.5 bg-gray-900 rounded-lg border border-gray-700 px-2 py-1">
+                <button @click="addQty = Math.max(1, addQty - 1)"
+                        class="text-gray-500 hover:text-white w-4 text-center leading-none">−</button>
+                <span class="text-sm font-mono w-5 text-center tabular-nums" x-text="addQty"></span>
+                <button @click="addQty++"
+                        class="text-gray-500 hover:text-white w-4 text-center leading-none">+</button>
+              </div>
+              <button @click="addToCollection(selectedCard, addQty)"
+                      class="flex-1 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors"
+                      :class="isInCollection(selectedCard?.name)
+                        ? 'bg-green-900/40 hover:bg-green-900/60 text-green-400 border border-green-900'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'"
+                      x-text="isInCollection(selectedCard?.name) ? '+ Add More Copies' : '+ Add to Collection'">
+              </button>
+            </div>
+
+            <!-- Remove from collection -->
+            <button x-show="isInCollection(selectedCard?.name)"
+                    @click="removeFromCollectionByName(selectedCard?.name)"
+                    class="w-full text-xs text-red-500 hover:text-red-400 transition-colors py-0.5">
+              Remove from collection
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </aside>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- MAIN: Collection list                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <!-- Stats header -->
+      <header class="bg-gray-900 border-b border-gray-800 px-5 py-3 flex items-center gap-6 flex-shrink-0">
+        <h2 class="font-bold text-white text-lg">📦 My Collection</h2>
+        <div class="flex items-center gap-4 ml-2">
+          <div class="text-center">
+            <p class="text-lg font-bold text-purple-400 tabular-nums leading-none" x-text="totalUnique"></p>
+            <p class="text-xs text-gray-600 mt-0.5">Unique</p>
+          </div>
+          <div class="text-center">
+            <p class="text-lg font-bold text-blue-400 tabular-nums leading-none" x-text="totalCopies"></p>
+            <p class="text-xs text-gray-600 mt-0.5">Copies</p>
+          </div>
+          <div class="text-center">
+            <p class="text-lg font-bold text-green-400 font-mono tabular-nums leading-none"
+               x-text="`$${totalValue.toFixed(2)}`"></p>
+            <p class="text-xs text-gray-600 mt-0.5">Value</p>
+          </div>
+        </div>
+        <div class="flex-1"></div>
+        <button @click="openImportModal()"
+                class="text-xs bg-gray-700 hover:bg-gray-600 border border-gray-600 px-3 py-1.5 rounded-lg transition-colors">
+          ↑ Import List
+        </button>
+        <button @click="showClearModal = true"
+                x-show="cards.length > 0"
+                class="text-xs bg-red-900/40 hover:bg-red-900/70 border border-red-800 text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg transition-colors">
+          🗑 Clear Collection
+        </button>
+      </header>
+
+      <!-- Filter bar -->
+      <div class="border-b border-gray-800/60 bg-gray-900/40 px-5 py-2 flex items-center gap-3 flex-shrink-0">
+        <input x-model="filterQuery"
+               class="flex-1 bg-gray-800 text-sm px-3 py-1.5 rounded-lg border border-gray-700 focus:border-purple-500 focus:outline-none placeholder-gray-600"
+               placeholder="Filter collection…" />
+        <span x-show="filterQuery" class="text-xs text-gray-500"
+              x-text="`${filteredCards.length} result${filteredCards.length !== 1 ? 's' : ''}`"></span>
+      </div>
+
+      <!-- Collection list -->
+      <main class="flex-1 overflow-y-auto p-5 space-y-5">
+
+        <!-- Empty state -->
+        <div x-show="cards.length === 0"
+             class="flex flex-col items-center justify-center h-full text-gray-700">
+          <p class="text-5xl mb-4">📦</p>
+          <p class="text-lg font-medium">Your collection is empty</p>
+          <p class="text-sm mt-1">Search for cards in the left panel to add them →</p>
+          <p class="text-sm mt-0.5">Or import a deck list with the button above ↑</p>
+        </div>
+
+        <!-- No filter results -->
+        <div x-show="cards.length > 0 && filteredCards.length === 0"
+             class="flex flex-col items-center justify-center h-48 text-gray-600">
+          <p class="text-3xl mb-2">🔎</p>
+          <p class="text-sm">No cards match "<span x-text="filterQuery"></span>"</p>
+        </div>
+
+        <!-- Card groups -->
+        <template x-for="type in TYPE_ORDER" :key="type">
+          <div x-show="cardsByType[type]?.length > 0">
+            <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+              <span x-text="type"></span>
+              <span class="text-gray-600 font-normal normal-case tracking-normal"
+                    x-text="`(${cardsByType[type].reduce((s,c)=>s+c.quantity,0)})`"></span>
+              <span class="ml-auto text-gray-600 font-normal normal-case tracking-normal"
+                    x-text="`$${cardsByType[type].reduce((s,c)=>s+(c.usd_price||0)*c.quantity,0).toFixed(2)}`"></span>
+            </h3>
+            <div class="space-y-1">
+              <template x-for="card in cardsByType[type]" :key="card.id">
+                <div class="bg-gray-800/60 hover:bg-gray-800 rounded-lg px-4 py-2 flex items-center gap-3 group border border-transparent hover:border-gray-700/50 transition-all"
+                     @mouseenter="showHoverCard(card, $event)" @mouseleave="hideHoverCard()">
+
+                  <!-- Quantity controls -->
+                  <div class="flex items-center gap-1 flex-shrink-0">
+                    <button @click="updateQuantity(card, -1)"
+                            class="w-5 h-5 text-gray-500 hover:text-white text-xs flex items-center justify-center hover:bg-gray-700 rounded transition-colors">−</button>
+                    <span class="text-sm font-mono tabular-nums w-6 text-center text-gray-200"
+                          x-text="card.quantity"></span>
+                    <button @click="updateQuantity(card, 1)"
+                            class="w-5 h-5 text-gray-500 hover:text-white text-xs flex items-center justify-center hover:bg-gray-700 rounded transition-colors">+</button>
+                  </div>
+
+                  <!-- Card name -->
+                  <span class="text-sm flex-1 truncate" x-text="card.card_name"></span>
+
+                  <!-- Mana cost -->
+                  <span class="text-xs text-gray-600 hidden lg:block flex-shrink-0"
+                        x-text="card.mana_cost"></span>
+
+                  <!-- Price -->
+                  <span class="text-xs font-mono tabular-nums w-16 text-right flex-shrink-0"
+                        :class="card.usd_price ? 'text-green-400' : 'text-gray-600'"
+                        x-text="card.usd_price ? `$${card.usd_price.toFixed(2)}` : '—'"></span>
+
+                  <!-- Remove -->
+                  <button @click="removeCard(card.id)"
+                          class="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-red-400 transition-all text-xs flex-shrink-0">
+                    ✕
+                  </button>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </main>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- IMPORT MODAL                                                           -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showImportModal"
+       x-transition.opacity
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showImportModal = false">
+
+    <div class="bg-gray-900 rounded-2xl w-full max-w-xl border border-gray-700 shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
+        <div>
+          <h2 class="font-bold text-white">Import to Collection</h2>
+          <p class="text-xs text-gray-500 mt-0.5">Upload a Moxfield CSV export, or paste a plain card list.</p>
+        </div>
+        <button @click="showImportModal = false" class="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 p-5 space-y-4">
+
+        <!-- File upload -->
+        <label class="flex items-center gap-3 cursor-pointer bg-gray-800/60 hover:bg-gray-800 border border-dashed border-gray-600 hover:border-purple-500 rounded-xl px-4 py-3 transition-colors group">
+          <span class="text-2xl">📎</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">Upload Moxfield CSV</p>
+            <p class="text-xs text-gray-600 mt-0.5">
+              <span x-show="!importFileName">Export from Moxfield → Binder → Export CSV</span>
+              <span x-show="importFileName" class="text-purple-400" x-text="importFileName"></span>
+            </p>
+          </div>
+          <span class="text-xs text-gray-600 group-hover:text-gray-400 flex-shrink-0">Browse…</span>
+          <input type="file" accept=".csv" @change="onCsvUpload($event)" class="hidden" />
+        </label>
+
+        <!-- Divider -->
+        <div class="flex items-center gap-3">
+          <div class="flex-1 border-t border-gray-800"></div>
+          <span class="text-xs text-gray-600">or paste a card list</span>
+          <div class="flex-1 border-t border-gray-800"></div>
+        </div>
+
+        <textarea x-model="importText"
+                  @input="onImportTextChange()"
+                  class="w-full bg-gray-800 text-xs text-gray-300 font-mono p-3 rounded-lg border border-gray-700 focus:border-purple-500 focus:outline-none h-36 resize-none placeholder-gray-600"
+                  placeholder="4 Lightning Bolt&#10;2 Sol Ring&#10;1 Command Tower&#10;..."></textarea>
+
+        <!-- Parse preview -->
+        <div x-show="importParsed.length > 0" class="bg-gray-800/60 rounded-lg px-4 py-3 text-sm">
+          <div class="flex justify-between items-center">
+            <div class="flex items-center gap-2">
+              <span class="text-gray-400">Parsed</span>
+              <span x-show="importFormat === 'csv'"
+                    class="text-xs bg-purple-900/60 text-purple-300 border border-purple-800 px-1.5 py-0.5 rounded">
+                Moxfield CSV
+              </span>
+            </div>
+            <span class="text-white font-semibold tabular-nums"
+                  x-text="`${importParsed.length} unique · ${importParsed.reduce((s,c)=>s+c.quantity,0)} copies`"></span>
+          </div>
+        </div>
+
+        <!-- Result -->
+        <div x-show="importStatus === 'done' && importResult" class="space-y-2">
+          <div class="bg-green-950/50 border border-green-900/50 rounded-lg px-4 py-3 text-sm">
+            <div class="flex justify-between">
+              <span class="text-green-400 font-semibold">Added to collection</span>
+              <span class="text-green-300 tabular-nums" x-text="`${importResult?.added ?? 0} cards`"></span>
+            </div>
+          </div>
+          <div x-show="importResult?.not_found?.length > 0"
+               class="bg-red-950/40 border border-red-900/40 rounded-lg px-4 py-3 text-sm">
+            <p class="text-red-400 font-semibold mb-2"
+               x-text="`Not found (${importResult.not_found.length})`"></p>
+            <ul class="space-y-0.5 max-h-24 overflow-y-auto">
+              <template x-for="name in importResult.not_found" :key="name">
+                <li class="text-red-300 text-xs" x-text="name"></li>
+              </template>
+            </ul>
+          </div>
+        </div>
+
+        <div x-show="importStatus === 'error'"
+             class="bg-red-950/50 border border-red-900/50 rounded-lg px-4 py-3 text-sm text-red-300">
+          Failed to fetch card data. Check your connection and try again.
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-t border-gray-800 flex gap-3 flex-shrink-0">
+        <button x-show="importStatus !== 'done'"
+                @click="fetchImportPrices()"
+                :disabled="importParsed.length === 0 || importStatus === 'fetching'"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold transition-colors"
+                :class="importParsed.length === 0 || importStatus === 'fetching'
+                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-purple-600 hover:bg-purple-500 text-white'"
+                x-text="importStatus === 'fetching' ? '↻ Importing…' : `Import (${importParsed.length} cards)`">
+        </button>
+        <button x-show="importStatus === 'done'"
+                @click="showImportModal = false"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold bg-green-700 hover:bg-green-600 text-white transition-colors">
+          ✓ Done
+        </button>
+        <button @click="showImportModal = false"
+                class="px-4 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- CLEAR COLLECTION CONFIRM MODAL                                         -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="showClearModal"
+       x-transition.opacity
+       class="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4"
+       @click.self="showClearModal = false">
+    <div class="bg-gray-900 rounded-2xl w-full max-w-sm border border-gray-700 shadow-2xl p-6 text-center">
+      <p class="text-3xl mb-3">🗑️</p>
+      <h2 class="font-bold text-white text-lg mb-1">Clear Entire Collection?</h2>
+      <p class="text-sm text-gray-400 mb-6">
+        This will permanently delete all
+        <span class="text-white font-semibold" x-text="totalUnique"></span> cards
+        (<span class="text-white font-semibold" x-text="totalCopies"></span> copies) from your collection.
+        Import a fresh CSV afterwards to reload it.
+      </p>
+      <div class="flex gap-3">
+        <button @click="showClearModal = false"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold bg-gray-700 hover:bg-gray-600 text-white transition-colors">
+          Cancel
+        </button>
+        <button @click="clearCollection()"
+                class="flex-1 py-2 rounded-lg text-sm font-semibold bg-red-700 hover:bg-red-600 text-white transition-colors">
+          Yes, Delete All
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- HOVER TOOLTIP                                                          -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <div x-show="hoverCard && hoverCard.image_uri"
+       x-cloak
+       :style="hoverStyle"
+       class="fixed z-[200] pointer-events-none w-48 rounded-xl overflow-hidden shadow-2xl border border-gray-600"
+       x-transition:enter="transition ease-out duration-100"
+       x-transition:enter-start="opacity-0 scale-95"
+       x-transition:enter-end="opacity-100 scale-100"
+       x-transition:leave="transition ease-in duration-75"
+       x-transition:leave-start="opacity-100 scale-100"
+       x-transition:leave-end="opacity-0 scale-95">
+    <img :src="hoverCard?.image_uri" :alt="hoverCard?.card_name" class="w-full block" />
+  </div>
+
+<script>
+document.addEventListener("alpine:init", () => {
+  Alpine.data("collectionManager", () => ({
+    cards: [],
+    searchQuery: "",
+    autocompleteResults: [],
+    showAutocomplete: false,
+    selectedCard: null,
+    isSearching: false,
+    searchDebounceTimer: null,
+    addQty: 1,
+    filterQuery: "",
+
+    showImportModal: false,
+    importText: "",
+    importParsed: [],
+    importStatus: "idle",
+    importResult: null,
+    importFormat: "text",   // "text" | "csv"
+    importFileName: "",
+
+    showClearModal: false,
+
+    hoverCard: null,
+    hoverStyle: "",
+    hoverTimer: null,
+
+    TYPE_ORDER: ["Creature", "Planeswalker", "Instant", "Sorcery", "Enchantment", "Artifact", "Land", "Other"],
+
+    async init() {
+      await this.fetchCollection();
+    },
+
+    async fetchCollection() {
+      const r = await fetch("/api/collection");
+      this.cards = await r.json();
+    },
+
+    onSearchInput() {
+      clearTimeout(this.searchDebounceTimer);
+      if (this.searchQuery.length < 2) {
+        this.autocompleteResults = [];
+        this.showAutocomplete = false;
+        return;
+      }
+      this.showAutocomplete = true;
+      this.searchDebounceTimer = setTimeout(async () => {
+        const r = await fetch(`/api/cards/autocomplete?q=${encodeURIComponent(this.searchQuery)}`);
+        const data = await r.json();
+        this.autocompleteResults = data.names;
+        this.showAutocomplete = this.autocompleteResults.length > 0;
+      }, 300);
+    },
+
+    async selectCardByName(name) {
+      this.searchQuery = name;
+      this.showAutocomplete = false;
+      this.autocompleteResults = [];
+      this.isSearching = true;
+      this.selectedCard = null;
+      this.addQty = 1;
+      try {
+        const r = await fetch(`/api/cards/named?name=${encodeURIComponent(name)}`);
+        if (r.ok) this.selectedCard = await r.json();
+      } finally {
+        this.isSearching = false;
+      }
+    },
+
+    isInCollection(name) {
+      return this.cards.some(c => c.card_name === name);
+    },
+
+    collectionQuantity(name) {
+      return this.cards.find(c => c.card_name === name)?.quantity ?? 0;
+    },
+
+    async addToCollection(card, qty = 1) {
+      if (!card) return;
+      await fetch("/api/collection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scryfall_id: card.id,
+          card_name: card.name,
+          quantity: qty,
+          image_uri: card.image_uri,
+          type_line: card.type_line,
+          usd_price: parseFloat(card.prices?.usd) || null,
+          mana_cost: card.mana_cost,
+          color_identity: JSON.stringify(card.color_identity ?? []),
+        }),
+      });
+      await this.fetchCollection();
+      this.addQty = 1;
+    },
+
+    async removeFromCollectionByName(name) {
+      const entry = this.cards.find(c => c.card_name === name);
+      if (!entry) return;
+      await this.removeCard(entry.id);
+    },
+
+    async updateQuantity(card, delta) {
+      const newQty = card.quantity + delta;
+      const r = await fetch(`/api/collection/${card.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: newQty }),
+      });
+      const data = await r.json();
+      if (data.deleted) {
+        this.cards = this.cards.filter(c => c.id !== card.id);
+      } else {
+        card.quantity = newQty;
+      }
+    },
+
+    async removeCard(id) {
+      await fetch(`/api/collection/${id}`, { method: "DELETE" });
+      this.cards = this.cards.filter(c => c.id !== id);
+    },
+
+    async clearCollection() {
+      this.showClearModal = false;
+      await fetch("/api/collection/all", { method: "DELETE" });
+      this.cards = [];
+    },
+
+    get filteredCards() {
+      if (!this.filterQuery) return this.cards;
+      const q = this.filterQuery.toLowerCase();
+      return this.cards.filter(c => c.card_name.toLowerCase().includes(q));
+    },
+
+    getCardType(typeLine) {
+      if (!typeLine) return "Other";
+      for (const t of ["Creature", "Planeswalker", "Instant", "Sorcery", "Enchantment", "Artifact", "Land"])
+        if (typeLine.includes(t)) return t;
+      return "Other";
+    },
+
+    get cardsByType() {
+      const groups = {};
+      for (const t of this.TYPE_ORDER) groups[t] = [];
+      for (const card of this.filteredCards)
+        groups[this.getCardType(card.type_line || "")].push(card);
+      return groups;
+    },
+
+    get totalUnique() { return this.cards.length; },
+    get totalCopies() { return this.cards.reduce((s, c) => s + c.quantity, 0); },
+    get totalValue() { return this.cards.reduce((s, c) => s + (c.usd_price || 0) * c.quantity, 0); },
+
+    openImportModal() {
+      this.importText = "";
+      this.importParsed = [];
+      this.importStatus = "idle";
+      this.importResult = null;
+      this.importFormat = "text";
+      this.importFileName = "";
+      this.showImportModal = true;
+    },
+
+    async onCsvUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      this.importFileName = file.name;
+      const text = await file.text();
+      this.importText = text;
+      this.onImportTextChange();
+    },
+
+    onImportTextChange() {
+      if (this.importStatus === "done") {
+        this.importStatus = "idle";
+        this.importResult = null;
+      }
+      const csv = this.parseMoxfieldCsv(this.importText);
+      if (csv !== null) {
+        this.importParsed = csv;
+        this.importFormat = "csv";
+      } else {
+        this.importParsed = this.parseDecklist(this.importText);
+        this.importFormat = "text";
+      }
+    },
+
+    parseMoxfieldCsv(text) {
+      const lines = text.trim().split("\n");
+      if (lines.length < 2) return null;
+
+      // Must have the Moxfield header
+      const headerLine = lines[0];
+      if (!headerLine.includes('"Count"') || !headerLine.includes('"Name"')) return null;
+
+      const headers = this.parseCsvLine(headerLine);
+      const countIdx = headers.indexOf("Count");
+      const nameIdx  = headers.indexOf("Name");
+      if (countIdx === -1 || nameIdx === -1) return null;
+
+      const seen = new Map();
+      for (const raw of lines.slice(1)) {
+        if (!raw.trim()) continue;
+        const cols = this.parseCsvLine(raw);
+        const name = cols[nameIdx]?.trim();
+        const qty  = parseInt(cols[countIdx], 10) || 1;
+        if (!name) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) seen.get(key).quantity += qty;
+        else seen.set(key, { name, quantity: qty });
+      }
+      return Array.from(seen.values());
+    },
+
+    parseCsvLine(line) {
+      // RFC 4180-compatible CSV parser (handles quoted fields with escaped quotes)
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+          else { inQuotes = !inQuotes; }
+        } else if (ch === "," && !inQuotes) {
+          result.push(current);
+          current = "";
+        } else {
+          current += ch;
+        }
+      }
+      result.push(current);
+      return result;
+    },
+
+    parseDecklist(text) {
+      const CARD_RE = /^(\d+)x?\s+(.+)$/;
+      const SECTION_RE = /^(Commander|Deck|Main\s*Deck?|Sideboard|Maybeboard|Companion|Lands?|Creatures?|Instants?|Sorceries|Enchantments?|Artifacts?|Planeswalkers?|Other|About)\s*(\(\d+\))?$/i;
+      const seen = new Map();
+      for (const raw of text.split("\n")) {
+        const line = raw.trim();
+        if (!line || line.startsWith("//") || line.startsWith("#")) continue;
+        if (SECTION_RE.test(line)) continue;
+        const match = line.match(CARD_RE);
+        if (!match) continue;
+        const qty = parseInt(match[1], 10);
+        const name = match[2].trim();
+        if (/^cards?$/i.test(name)) continue;
+        const key = name.toLowerCase();
+        if (seen.has(key)) seen.get(key).quantity += qty;
+        else seen.set(key, { name, quantity: qty });
+      }
+      return Array.from(seen.values());
+    },
+
+    async fetchImportPrices() {
+      if (!this.importParsed.length) return;
+      this.importStatus = "fetching";
+      this.importResult = null;
+      try {
+        const r = await fetch("/api/collection/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cards: this.importParsed }),
+        });
+        if (!r.ok) throw new Error();
+        this.importResult = await r.json();
+        this.importStatus = "done";
+        await this.fetchCollection();
+      } catch {
+        this.importStatus = "error";
+      }
+    },
+
+    showHoverCard(card, event) {
+      clearTimeout(this.hoverTimer);
+      this.hoverTimer = setTimeout(() => {
+        if (!card?.image_uri) return;
+        const tooltipWidth = 192;
+        const margin = 16;
+        let x = event.clientX + margin;
+        if (x + tooltipWidth > window.innerWidth) x = event.clientX - tooltipWidth - margin;
+        const y = Math.max(8, Math.min(event.clientY - 60, window.innerHeight - 280));
+        this.hoverStyle = `left:${x}px;top:${y}px`;
+        this.hoverCard = card;
+      }, 150);
+    },
+
+    hideHoverCard() {
+      clearTimeout(this.hoverTimer);
+      this.hoverCard = null;
+    },
+  }));
+});
+</script>
+</body>
+</html>
